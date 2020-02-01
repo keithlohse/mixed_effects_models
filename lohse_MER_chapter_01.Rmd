@@ -1,0 +1,59 @@
+---
+title: "Mixed-Effects Models for Clinical Sciences (Part 1)"
+author: "Keith Lohse, PhD"
+date: "1/30/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Mixed-Effect Models as an Analogue for Multi-Factorial ANOVA
+
+For these examples, we are going to work with a fictional data that that has two 
+fully nested (i.e., between-subjects) and two fully crossed (i.e., within-subject)
+factors. We have two hypothetical groups of older adults (OA, >65 y) and younger 
+adults (YA, <35 y). Within each of those groups, half of the participants were
+in the control group (C) and half were in the treatment group (T). Each participant 
+was also measured at three different times (1 to 3) in three different conditions 
+(A, B, and C). The first ten rows of these data can be seen below. 
+
+
+```{r, setting libraries, results="hide", message = FALSE}
+library(tidyverse); library(RCurl)
+
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
+```
+
+``` {r, print data to screen}
+head(DATA, 10)
+
+```
+
+Because we will want to ignore each of the within-subject variables at different 
+times, we will want to average across trials to create a data set with one 
+observation per condition (data_COND), and we will want to average across conditions
+to create a data set with one observation at each time (data_TIME).
+
+Averaging across time, here are the first ten rows of data_COND. 
+```{r, subsetting data by condition}
+data_COND <- aggregate(Y ~ subID + condition + age_group + group, data=DATA, FUN=mean)
+data_COND <- data_COND %>% arrange(subID, age_group, group, condition)
+head(data_COND, 10)
+```
+
+Averaging across condiitons, here are the first ten rows of data_TIME. 
+``` {r, subsetting data by time}
+data_TIME <- aggregate(Y ~ subID + time + age_group + group, data=DATA, FUN=mean)
+data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
+head(data_TIME)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
