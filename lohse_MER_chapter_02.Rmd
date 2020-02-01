@@ -1,5 +1,5 @@
 ---
-title: "Chapter 1: An Introduction to Mixed-Effect Models"
+title: "Chapter 2: Mixed-Effects Models for Factorial Designs"
 author: "Keith Lohse, PhD, PStat"
 date: "1/30/2020"
 output:
