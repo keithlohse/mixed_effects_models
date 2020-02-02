@@ -58,7 +58,7 @@ data to get a better sense of what our data are saying.
 ggplot(data_COND, aes(x = condition, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
              position=position_jitter(w=0.2, h=0))+
-  geom_boxplot(aes(fill=condition), col="black", outlier.shape = "na",
+  geom_boxplot(aes(fill=condition), col="black", 
                alpha=0.4, width=0.5)+
   scale_x_discrete(name = "Condition") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
@@ -155,7 +155,7 @@ DATA$time <- factor(DATA$time)
 ggplot(DATA, aes(x = time, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
              position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=condition), col="black", outlier.shape = "na",
+  geom_boxplot(aes(fill=condition), col="black", 
                alpha=0.4, width=0.5)+
   scale_x_discrete(name = "Time") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
@@ -260,7 +260,7 @@ We can see this more clearly if we plot all of our data.
 ggplot(data_COND, aes(x = condition, y = speed)) +
   geom_point(aes(fill=group), pch=21, size=2,
              position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=group), col="black", outlier.shape = "na",
+  geom_boxplot(aes(fill=group), col="black",
                alpha=0.4, width=0.5)+
   facet_wrap(~age_group)+
   scale_x_discrete(name = "Condition") +
