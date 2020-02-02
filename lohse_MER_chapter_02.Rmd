@@ -342,7 +342,7 @@ Time.
 
 ``` {r plotting multiple crossed and nested factors}
 DATA$time <- factor(DATA$time)
-summary(DATA$time)
+
 ggplot(DATA, aes(x = time, y = speed)) +
   geom_point(aes(fill=group), size=2, shape=21,
              position=position_jitterdodge(dodge.width = 0.5))+
