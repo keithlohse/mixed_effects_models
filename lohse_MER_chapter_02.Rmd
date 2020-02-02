@@ -1,10 +1,11 @@
 ---
-title: "Chapter 2: Mixed-Effects Models for Factorial Designs"
+title: 'Chapter 2: Mixed-Effects Models for Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
 date: "2/2/2020"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 For these examples, we are going to work with a fictional data that that has two 
@@ -264,7 +265,7 @@ ggplot(data_COND, aes(x = condition, y = speed)) +
                alpha=0.4, width=0.5)+
   facet_wrap(~age_group)+
   scale_x_discrete(name = "Condition") +
-  scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
+  scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),

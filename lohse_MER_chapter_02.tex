@@ -1,0 +1,1310 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Chapter 2: Mixed-Effects Models for Factorial Designs},
+            pdfauthor={Keith Lohse, PhD, PStat},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\providecommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Chapter 2: Mixed-Effects Models for Factorial Designs}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{Keith Lohse, PhD, PStat}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{2/2/2020}
+
+
+\begin{document}
+\maketitle
+
+For these examples, we are going to work with a fictional data that that
+has two fully nested (i.e., between-subjects) and two fully crossed
+(i.e., within-subject) factors. We have two hypothetical groups of older
+adults (OA, \textgreater65 y) and younger adults (YA, \textless35 y).
+Within each of those groups, half of the participants were in the
+control group (C) and half were in the treatment group (T). Each
+participant was also measured at three different times (1 to 3) in three
+different conditions (A, B, and C). The first ten rows of these data can
+be seen below.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(tidyverse); }\KeywordTok{library}\NormalTok{(RCurl); }\KeywordTok{library}\NormalTok{(ez); }\KeywordTok{library}\NormalTok{(lme4); }\KeywordTok{library}\NormalTok{(lmerTest)}
+
+\NormalTok{DATA <{-}}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"https://raw.githubusercontent.com/keithlohse/mixed\_effects\_models/master/data\_example.csv"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{head}\NormalTok{(DATA, }\DecValTok{10}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    subID group age_group condition time     speed
+## 1     s1    CG        OA         A    1 0.6973960
+## 2     s1    CG        OA         A    2 0.7605492
+## 3     s1    CG        OA         A    3 0.6110076
+## 4     s1    CG        OA         A    4 0.6156949
+## 5     s1    CG        OA         B    1 1.2853857
+## 6     s1    CG        OA         B    2 0.9632404
+## 7     s1    CG        OA         B    3 0.7748278
+## 8     s1    CG        OA         B    4 0.7083246
+## 9     s1    CG        OA         C    1 0.8016847
+## 10    s1    CG        OA         C    2 0.6802459
+\end{verbatim}
+
+Because we will want to ignore each of the within-subject variables at
+different times, we will want to average across trials to create a data
+set with one observation per condition (data\_COND), and we will want to
+average across conditions to create a data set with one observation at
+each time (data\_TIME).
+
+Averaging across time, here are the first ten rows of data\_COND.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{data\_COND <{-}}\StringTok{ }\KeywordTok{aggregate}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{subID }\OperatorTok{+}\StringTok{ }\NormalTok{condition }\OperatorTok{+}\StringTok{ }\NormalTok{age\_group }\OperatorTok{+}\StringTok{ }\NormalTok{group, }\DataTypeTok{data=}\NormalTok{DATA, }\DataTypeTok{FUN=}\NormalTok{mean)}
+\NormalTok{data\_COND <{-}}\StringTok{ }\NormalTok{data\_COND }\OperatorTok{\%>\%}\StringTok{ }\KeywordTok{arrange}\NormalTok{(subID, age\_group, group, condition)}
+\KeywordTok{head}\NormalTok{(data\_COND, }\DecValTok{10}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    subID condition age_group group     speed
+## 1     s1         A        OA    CG 0.6711620
+## 2     s1         B        OA    CG 0.9329446
+## 3     s1         C        OA    CG 0.6419632
+## 4    s10         A        OA    CG 0.6803930
+## 5    s10         B        OA    CG 0.8952121
+## 6    s10         C        OA    CG 0.6388253
+## 7    s11         A        YA    CG 0.6654044
+## 8    s11         B        YA    CG 0.8697005
+## 9    s11         C        YA    CG 0.6274834
+## 10   s12         A        YA    CG 0.3940999
+\end{verbatim}
+
+Averaging across condiitons, here are the first ten rows of data\_TIME.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{data\_TIME <{-}}\StringTok{ }\KeywordTok{aggregate}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{subID }\OperatorTok{+}\StringTok{ }\NormalTok{time }\OperatorTok{+}\StringTok{ }\NormalTok{age\_group }\OperatorTok{+}\StringTok{ }\NormalTok{group, }\DataTypeTok{data=}\NormalTok{DATA, }\DataTypeTok{FUN=}\NormalTok{mean)}
+\NormalTok{data\_TIME <{-}}\StringTok{ }\NormalTok{data\_TIME }\OperatorTok{\%>\%}\StringTok{ }\KeywordTok{arrange}\NormalTok{(subID, age\_group, group, time)}
+\KeywordTok{head}\NormalTok{(data\_TIME)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   subID time age_group group     speed
+## 1    s1    1        OA    CG 0.9281555
+## 2    s1    2        OA    CG 0.8013452
+## 3    s1    3        OA    CG 0.6469040
+## 4    s1    4        OA    CG 0.6183551
+## 5   s10    1        OA    CG 0.8973438
+## 6   s10    2        OA    CG 0.7818411
+\end{verbatim}
+
+\hypertarget{one-way-repeated-measures-anova}{%
+\section{One-Way Repeated Measures
+ANOVA}\label{one-way-repeated-measures-anova}}
+
+\hypertarget{a-single-crossed-factor}{%
+\subsection{(A Single Crossed Factor)}\label{a-single-crossed-factor}}
+
+For this example, we will focus on only the effect of condition, so we
+will use the data\_COND dataset to average across different trials.
+First, let's plot the data to get a better sense of what our data are
+saying.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ggplot}\NormalTok{(data\_COND, }\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =}\NormalTok{ condition, }\DataTypeTok{y =}\NormalTok{ speed)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_point}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{condition), }\DataTypeTok{pch=}\DecValTok{21}\NormalTok{, }\DataTypeTok{size=}\DecValTok{2}\NormalTok{,}
+             \DataTypeTok{position=}\KeywordTok{position\_jitter}\NormalTok{(}\DataTypeTok{w=}\FloatTok{0.2}\NormalTok{, }\DataTypeTok{h=}\DecValTok{0}\NormalTok{))}\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_boxplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{condition), }\DataTypeTok{col=}\StringTok{"black"}\NormalTok{, }
+               \DataTypeTok{alpha=}\FloatTok{0.4}\NormalTok{, }\DataTypeTok{width=}\FloatTok{0.5}\NormalTok{)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_x\_discrete}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Condition"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_y\_continuous}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Speed (m/s)"}\NormalTok{, }\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{3}\NormalTok{)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{color=}\StringTok{"black"}\NormalTok{), }
+        \DataTypeTok{axis.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{plot.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{, }\DataTypeTok{hjust=}\FloatTok{0.5}\NormalTok{),}
+        \DataTypeTok{panel.grid.minor =} \KeywordTok{element\_blank}\NormalTok{(),}
+        \DataTypeTok{strip.text =} \KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{legend.position =} \StringTok{"none"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{lohse_MER_chapter_02_files/figure-latex/plotting the effects of condition-1.pdf}
+
+\hypertarget{as-an-anova}{%
+\subsection{As an ANOVA\ldots{}}\label{as-an-anova}}
+
+To implement a simple one-way repeated measures ANOVA, we have a few
+options. We could directly code our ANOVA using the aov() function in R:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(}\KeywordTok{aov}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{condition }\OperatorTok{+}\StringTok{ }\KeywordTok{Error}\NormalTok{(subID}\OperatorTok{/}\NormalTok{condition), }\DataTypeTok{data=}\NormalTok{data\_COND))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Error: subID
+##           Df Sum Sq Mean Sq F value Pr(>F)
+## Residuals 39  3.374 0.08653               
+## 
+## Error: subID:condition
+##           Df Sum Sq Mean Sq F value Pr(>F)    
+## condition  2  1.554  0.7769    1595 <2e-16 ***
+## Residuals 78  0.038  0.0005                   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+Or we can use the ezANOVA() function from the ``ez'' package.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ezANOVA}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ data\_COND, }
+    \DataTypeTok{dv =}\NormalTok{ .(speed),}
+    \DataTypeTok{wid =}\NormalTok{ .(subID),}
+    \DataTypeTok{within =}\NormalTok{ .(condition)}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $ANOVA
+##      Effect DFn DFd        F           p p<.05       ges
+## 2 condition   2  78 1595.374 5.38041e-64     * 0.3128589
+## 
+## $`Mauchly's Test for Sphericity`
+##      Effect         W         p p<.05
+## 2 condition 0.9204751 0.2071234      
+## 
+## $`Sphericity Corrections`
+##      Effect       GGe        p[GG] p[GG]<.05       HFe        p[HF] p[HF]<.05
+## 2 condition 0.9263335 1.806101e-59         * 0.9705498 3.467917e-62         *
+\end{verbatim}
+
+Although these two different functions present the results in a slightly
+different ways, note that the f-values for the two different omnibus
+tests match. By either method, the f-observed for the main-effect of
+condition is F(2,158) = 68.86, p \textless{} 0.001.
+
+If you are familiar with issues of contrast versus treatment coding,
+Type I versus Type III Sums of Squared Errors, and colinearity, then
+directly controlling your own ANOVA using base R is probably a safe bet.
+If you are not familiar with those terms/issues, then the ezANOVA code
+is probably the best solution for a quick fix, but I would strongly
+encourage you to develop a more detailed understanding of general-linear
+models before jumping into mixed-effect models.
+
+Specifically, by default the aov() function provides a test of your
+statistical model using Type I Sums of Squared Errors, whereas the
+ezANOVA() function provides a test of your statistical model using Type
+III Sums of Squared Errors. In a completely orthogonal design where all
+factors are statistically independent of each other (i.e., there is no
+colinearity), the Type I and Type III Sums of Squared Errors will agree.
+By default, R also used treatment coding (or ``dummy'' coding) for
+categorical factors rather than orthogonal constrast codes. The omnibus
+F-tests that we see in the ANOVA output will be the same regardless of
+the types of codes used, but if we dig into individual regression
+coefficients, it is important to remember how these variables were coded
+so that we can interpret them correctly.
+
+\hypertarget{one-way-rm-anova-as-a-mixed-effect-model}{%
+\subsection{One-way RM ANOVA as a mixed-effect
+model\ldots{}}\label{one-way-rm-anova-as-a-mixed-effect-model}}
+
+Because we only have a single within-subject factor, we will only need
+to add a random-effect of subject to account for individual differences
+between subjects. By partitioning the between-subjects variance out of
+our model, we can fairly test the effect of condition, because our
+residuals will now be independent of each other.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# First we will define our model}
+\NormalTok{mod1 <{-}}\StringTok{ }\KeywordTok{lmer}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }
+\StringTok{               }\CommentTok{\# Fixed Effects:}
+\StringTok{               }\NormalTok{condition }\OperatorTok{+}\StringTok{ }
+\StringTok{               }\CommentTok{\# Random Effects: }
+\StringTok{               }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{subID), }
+             \CommentTok{\# Define the data: }
+             \DataTypeTok{data=}\NormalTok{data\_COND, }\DataTypeTok{REML =} \OtherTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# We can then get the ANOVA results for our model:}
+\KeywordTok{anova}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Type III Analysis of Variance Table with Satterthwaite's method
+##           Sum Sq Mean Sq NumDF DenDF F value    Pr(>F)    
+## condition 1.5537 0.77686     2    78  1595.4 < 2.2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+If we want to delve deeper into our model, we can also use the summary()
+function to get more information about model fit statistics, parameter
+estimates, random-effects and residuals.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+## lmerModLmerTest]
+## Formula: speed ~ condition + (1 | subID)
+##    Data: data_COND
+## 
+## REML criterion at convergence: -347.3
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -1.96018 -0.52737 -0.02761  0.51110  1.88647 
+## 
+## Random effects:
+##  Groups   Name        Variance  Std.Dev.
+##  subID    (Intercept) 0.0286797 0.16935 
+##  Residual             0.0004869 0.02207 
+## Number of obs: 120, groups:  subID, 40
+## 
+## Fixed effects:
+##              Estimate Std. Error        df t value Pr(>|t|)    
+## (Intercept)  0.630484   0.027003 39.879817  23.349   <2e-16 ***
+## conditionB   0.239068   0.004934 78.000171  48.451   <2e-16 ***
+## conditionC  -0.004558   0.004934 78.000171  -0.924    0.358    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Correlation of Fixed Effects:
+##            (Intr) cndtnB
+## conditionB -0.091       
+## conditionC -0.091  0.500
+\end{verbatim}
+
+\hypertarget{two-way-repeated-measures-anova}{%
+\section{Two-Way Repeated Measures
+ANOVA}\label{two-way-repeated-measures-anova}}
+
+\hypertarget{multiple-crossed-factors}{%
+\subsection{(Multiple Crossed Factors)}\label{multiple-crossed-factors}}
+
+For this example, we will be analyzing both Time and Condition, so we
+will use our original full data frame, DATA. First, let's plot the data
+to get a better sense of what our data look like.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{DATA}\OperatorTok{$}\NormalTok{time <{-}}\StringTok{ }\KeywordTok{factor}\NormalTok{(DATA}\OperatorTok{$}\NormalTok{time)}
+
+\KeywordTok{ggplot}\NormalTok{(DATA, }\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =}\NormalTok{ time, }\DataTypeTok{y =}\NormalTok{ speed)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_point}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{condition), }\DataTypeTok{pch=}\DecValTok{21}\NormalTok{, }\DataTypeTok{size=}\DecValTok{2}\NormalTok{,}
+             \DataTypeTok{position=}\KeywordTok{position\_jitterdodge}\NormalTok{(}\DataTypeTok{dodge.width =} \FloatTok{0.5}\NormalTok{))}\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_boxplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{condition), }\DataTypeTok{col=}\StringTok{"black"}\NormalTok{, }
+               \DataTypeTok{alpha=}\FloatTok{0.4}\NormalTok{, }\DataTypeTok{width=}\FloatTok{0.5}\NormalTok{)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_x\_discrete}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Time"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_y\_continuous}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Speed (m/s)"}\NormalTok{, }\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{3}\NormalTok{)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{color=}\StringTok{"black"}\NormalTok{), }
+        \DataTypeTok{axis.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{plot.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{, }\DataTypeTok{hjust=}\FloatTok{0.5}\NormalTok{),}
+        \DataTypeTok{panel.grid.minor =} \KeywordTok{element\_blank}\NormalTok{(),}
+        \DataTypeTok{strip.text =} \KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{legend.position =} \StringTok{"right"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{lohse_MER_chapter_02_files/figure-latex/plotting two repeated measures-1.pdf}
+
+\hypertarget{as-an-anova-1}{%
+\subsection{As an ANOVA\ldots{}}\label{as-an-anova-1}}
+
+Before we run our models, we want to convert time to a factor so that
+our model is treating time categorically rather than continuously. (In
+later modules, we will discuss how to mix continuous and categorical
+factors.) Additionally, remember that we are now using our larger data
+set ``DATA'' rather than our aggregated data set ``data\_COND''. To
+implement a two-way repeated measures ANOVA, we have the same options as
+before. We can directly code our ANOVA using the aov() function in R:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{DATA}\OperatorTok{$}\NormalTok{time <{-}}\StringTok{ }\KeywordTok{factor}\NormalTok{(DATA}\OperatorTok{$}\NormalTok{time)}
+\KeywordTok{summary}\NormalTok{(}\KeywordTok{aov}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{condition}\OperatorTok{*}\NormalTok{time }\OperatorTok{+}\StringTok{ }\KeywordTok{Error}\NormalTok{(subID}\OperatorTok{/}\NormalTok{(condition}\OperatorTok{*}\NormalTok{time)), }\DataTypeTok{data=}\NormalTok{DATA))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Error: subID
+##           Df Sum Sq Mean Sq F value Pr(>F)
+## Residuals 39   13.5  0.3461               
+## 
+## Error: subID:condition
+##           Df Sum Sq Mean Sq F value Pr(>F)    
+## condition  2  6.215  3.1074    1595 <2e-16 ***
+## Residuals 78  0.152  0.0019                   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:time
+##            Df Sum Sq Mean Sq F value Pr(>F)    
+## time        3 16.249   5.416   231.1 <2e-16 ***
+## Residuals 117  2.742   0.023                   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:condition:time
+##                 Df Sum Sq Mean Sq F value Pr(>F)    
+## condition:time   6 1.7004 0.28340   206.3 <2e-16 ***
+## Residuals      234 0.3214 0.00137                   
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+Or we can use the ezANOVA() function from the ``ez'' package.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ezANOVA}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ DATA, }
+    \DataTypeTok{dv =}\NormalTok{ .(speed),}
+    \DataTypeTok{wid =}\NormalTok{ .(subID),}
+    \DataTypeTok{within =}\NormalTok{ .(time, condition)}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $ANOVA
+##           Effect DFn DFd         F            p p<.05        ges
+## 2           time   3 117  231.1075 5.469444e-49     * 0.49295527
+## 3      condition   2  78 1595.3738 5.380410e-64     * 0.27105729
+## 4 time:condition   6 234  206.3205 1.791079e-90     * 0.09234525
+## 
+## $`Mauchly's Test for Sphericity`
+##           Effect           W            p p<.05
+## 2           time 0.005506229 2.631500e-40     *
+## 3      condition 0.920475134 2.071234e-01      
+## 4 time:condition 0.543351720 3.192589e-01      
+## 
+## $`Sphericity Corrections`
+##           Effect       GGe        p[GG] p[GG]<.05       HFe        p[HF]
+## 2           time 0.3535446 6.354576e-19         * 0.3551751 5.333292e-19
+## 3      condition 0.9263335 1.806101e-59         * 0.9705498 3.467917e-62
+## 4 time:condition 0.8542512 1.120585e-77         * 0.9988847 2.243961e-90
+##   p[HF]<.05
+## 2         *
+## 3         *
+## 4         *
+\end{verbatim}
+
+Again, regardless of the coding approach that you use, these two
+different functions produce the same f-observed for the main-effects of
+time, F(2,158) = 676.1, p \textless{} 0.001, and Condition, F(2, 158) =
+68.9, p \textless{} 0.001.
+
+\hypertarget{two-way-rm-anova-as-a-mixed-effect-model}{%
+\subsection{Two-way RM ANOVA as a mixed-effect
+model\ldots{}}\label{two-way-rm-anova-as-a-mixed-effect-model}}
+
+Because we now have two crossed factors, we need to not only account for
+the fact that we have multiple observations for each participant, but we
+have multiple observations coming from other factors. For instance, for
+the effect of Condition, we actually have condition effects at Time A,
+Time B, and Time C. The converse is also true for the effect of Time, we
+have effects of Time in Condition A, Condition B, and Condition C. Thus,
+in order to appropriately account for the statistical dependencies in
+our data, we need to add random-effects of ``time:subID'' and
+``condition:subID'' to the model.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# First we will define our model}
+\NormalTok{mod1 <{-}}\StringTok{ }\KeywordTok{lmer}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }
+\StringTok{               }\CommentTok{\# Fixed Effects:}
+\StringTok{               }\NormalTok{time}\OperatorTok{*}\NormalTok{condition }\OperatorTok{+}\StringTok{ }
+\StringTok{               }\CommentTok{\# Random Effects}
+\StringTok{               }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{subID)}\OperatorTok{+}\StringTok{ }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{time}\OperatorTok{:}\NormalTok{subID) }\OperatorTok{+}\StringTok{ }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{condition}\OperatorTok{:}\NormalTok{subID), }
+               \CommentTok{\# Define your data, }
+             \DataTypeTok{data=}\NormalTok{DATA, }\DataTypeTok{REML=}\OtherTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# We can then get the ANOVA results for our model:}
+\KeywordTok{anova}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Type III Analysis of Variance Table with Satterthwaite's method
+##                Sum Sq Mean Sq NumDF   DenDF F value    Pr(>F)    
+## time           0.9524 0.31746     3 117.002  231.11 < 2.2e-16 ***
+## condition      4.3831 2.19157     2  78.001 1595.47 < 2.2e-16 ***
+## time:condition 1.7004 0.28340     6 233.993  206.32 < 2.2e-16 ***
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+If we want to delve deeper into our model, we can also use the summary()
+function to get more information about model fit statistics, parameter
+estimates, random-effects and residuals.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+## lmerModLmerTest]
+## Formula: speed ~ time * condition + (1 | subID) + (1 | time:subID) + (1 |  
+##     condition:subID)
+##    Data: DATA
+## 
+## REML criterion at convergence: -1137.1
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.54791 -0.51044 -0.00404  0.51601  2.23932 
+## 
+## Random effects:
+##  Groups          Name        Variance  Std.Dev.
+##  time:subID      (Intercept) 0.0073542 0.08576 
+##  condition:subID (Intercept) 0.0001435 0.01198 
+##  subID           (Intercept) 0.0268437 0.16384 
+##  Residual                    0.0013736 0.03706 
+## Number of obs: 480, groups:  time:subID, 160; condition:subID, 120; subID, 40
+## 
+## Fixed effects:
+##                    Estimate Std. Error         df t value Pr(>|t|)    
+## (Intercept)        0.855586   0.029881  58.962904  28.633   <2e-16 ***
+## time2             -0.207771   0.020890 145.043253  -9.946   <2e-16 ***
+## time3             -0.331861   0.020890 145.043253 -15.886   <2e-16 ***
+## time4             -0.360775   0.020890 145.043253 -17.270   <2e-16 ***
+## conditionB         0.424710   0.008710 303.848137  48.764   <2e-16 ***
+## conditionC         0.003757   0.008710 303.848137   0.431   0.6665    
+## time2:conditionB  -0.146037   0.011720 233.993458 -12.460   <2e-16 ***
+## time3:conditionB  -0.267839   0.011720 233.993458 -22.853   <2e-16 ***
+## time4:conditionB  -0.328690   0.011720 233.993458 -28.045   <2e-16 ***
+## time2:conditionC  -0.022298   0.011720 233.993458  -1.903   0.0583 .  
+## time3:conditionC  -0.013171   0.011720 233.993458  -1.124   0.2623    
+## time4:conditionC   0.002208   0.011720 233.993458   0.188   0.8507    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr) time2  time3  time4  cndtnB cndtnC tm2:cB tm3:cB tm4:cB
+## time2       -0.350                                                        
+## time3       -0.350  0.500                                                 
+## time4       -0.350  0.500  0.500                                          
+## conditionB  -0.146  0.189  0.189  0.189                                   
+## conditionC  -0.146  0.189  0.189  0.189  0.500                            
+## tim2:cndtnB  0.098 -0.281 -0.140 -0.140 -0.673 -0.336                     
+## tim3:cndtnB  0.098 -0.140 -0.281 -0.140 -0.673 -0.336  0.500              
+## tim4:cndtnB  0.098 -0.140 -0.140 -0.281 -0.673 -0.336  0.500  0.500       
+## tim2:cndtnC  0.098 -0.281 -0.140 -0.140 -0.336 -0.673  0.500  0.250  0.250
+## tim3:cndtnC  0.098 -0.140 -0.281 -0.140 -0.336 -0.673  0.250  0.500  0.250
+## tim4:cndtnC  0.098 -0.140 -0.140 -0.281 -0.336 -0.673  0.250  0.250  0.500
+##             tm2:cC tm3:cC
+## time2                    
+## time3                    
+## time4                    
+## conditionB               
+## conditionC               
+## tim2:cndtnB              
+## tim3:cndtnB              
+## tim4:cndtnB              
+## tim2:cndtnC              
+## tim3:cndtnC  0.500       
+## tim4:cndtnC  0.500  0.500
+\end{verbatim}
+
+\hypertarget{mixed-factorial-anova-with-one-crossed-factor}{%
+\section{Mixed-Factorial ANOVA with One Crossed
+Factor}\label{mixed-factorial-anova-with-one-crossed-factor}}
+
+\hypertarget{split-plot-design}{%
+\subsection{(Split-Plot Design)}\label{split-plot-design}}
+
+For this example, we will now consider both of our between-subject
+factors of age and treatment, as well as the within-subject factor of
+condition. Do to this, we will average over the different times (1, 2,
+and 3) to get one observation in each condition. This design is
+sometimes referred as a ``mixed-factorial'' design, because we have a
+mix of between-subjects and within-subject factors. Depending on your
+background, you might be more familiar with this as a ``split plot''
+design. Split plot refers to the fact that some plots are assigned to
+different levels of Factor A (e.g., Treatment versus Control), but
+within each plot there is a second level of randomization to different
+levels of Factor B (e.g., Conditions A, B, or C). Both terms describe
+the same thing but differ in their unit of analysis. In pscyhology, a
+single person is usually the experimental unit (hence ``within-subject''
+variables) whereas in agronomy or biology a physical area might be the
+unit of analysis (hence ``split-plot'' variables). The more general way
+to talk about these terms is as nested- or crossed-factors. For fully
+nested factors, an experimental unit is represented in only one of the
+factors (e.g., a person can only be in the treatment group or the
+control group). For fully crossed factors, an experimental unit is
+represented at all levels of the factor (e.g., e.g., a person is tested
+in conditions A, B, and C).
+
+In our example, Treatment and Age-Group are nested factors, because each
+person is represented at only one level of each factor. However,
+Condition is a crossed factor, because each person is represented at all
+levels of Condition. We can see this more clearly if we plot all of our
+data.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ggplot}\NormalTok{(data\_COND, }\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =}\NormalTok{ condition, }\DataTypeTok{y =}\NormalTok{ speed)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_point}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{group), }\DataTypeTok{pch=}\DecValTok{21}\NormalTok{, }\DataTypeTok{size=}\DecValTok{2}\NormalTok{,}
+             \DataTypeTok{position=}\KeywordTok{position\_jitterdodge}\NormalTok{(}\DataTypeTok{dodge.width =} \FloatTok{0.5}\NormalTok{))}\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_boxplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{group), }\DataTypeTok{col=}\StringTok{"black"}\NormalTok{,}
+               \DataTypeTok{alpha=}\FloatTok{0.4}\NormalTok{, }\DataTypeTok{width=}\FloatTok{0.5}\NormalTok{)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{facet\_wrap}\NormalTok{(}\OperatorTok{\textasciitilde{}}\NormalTok{age\_group)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_x\_discrete}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Condition"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_y\_continuous}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Speed (m/s)"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{color=}\StringTok{"black"}\NormalTok{), }
+        \DataTypeTok{axis.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{plot.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{, }\DataTypeTok{hjust=}\FloatTok{0.5}\NormalTok{),}
+        \DataTypeTok{panel.grid.minor =} \KeywordTok{element\_blank}\NormalTok{(),}
+        \DataTypeTok{strip.text =} \KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{legend.position =} \StringTok{"right"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{lohse_MER_chapter_02_files/figure-latex/plotting crossed and nested factors-1.pdf}
+
+\hypertarget{as-an-anova-2}{%
+\subsection{As an ANOVA\ldots{}}\label{as-an-anova-2}}
+
+For this mixed factorial ANOVA, we have one factor of Condition that
+varies within subjects, but we have two factors (Age Group and Treatment
+Group) that vary between subjects. As before, we can directly code this
+into our analysis of variance using the aov() function or using the
+ezANOVA() function from the ``ez'' package.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(}\KeywordTok{aov}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{age\_group}\OperatorTok{*}\NormalTok{group}\OperatorTok{*}\NormalTok{condition }\OperatorTok{+}\StringTok{ }\KeywordTok{Error}\NormalTok{(subID}\OperatorTok{/}\NormalTok{condition), }\DataTypeTok{data=}\NormalTok{data\_COND))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Error: subID
+##                 Df Sum Sq Mean Sq F value   Pr(>F)    
+## age_group        1 0.7346  0.7346  20.639 6.01e-05 ***
+## group            1 1.3577  1.3577  38.148 4.04e-07 ***
+## age_group:group  1 0.0009  0.0009   0.026    0.872    
+## Residuals       36 1.2813  0.0356                     
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:condition
+##                           Df Sum Sq Mean Sq  F value Pr(>F)    
+## condition                  2 1.5537  0.7769 1587.609 <2e-16 ***
+## age_group:condition        2 0.0004  0.0002    0.398  0.673    
+## group:condition            2 0.0008  0.0004    0.814  0.447    
+## age_group:group:condition  2 0.0016  0.0008    1.599  0.209    
+## Residuals                 72 0.0352  0.0005                    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+Or we can use the ezANOVA() function from the ``ez'' package.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ezANOVA}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ data\_COND, }
+    \DataTypeTok{dv =}\NormalTok{ .(speed),}
+    \DataTypeTok{wid =}\NormalTok{ .(subID),}
+    \DataTypeTok{within =}\NormalTok{ .(condition),}
+    \DataTypeTok{between =}\NormalTok{ .(group, age\_group)}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $ANOVA
+##                      Effect DFn DFd            F            p p<.05
+## 2                     group   1  36 3.814802e+01 4.041332e-07     *
+## 3                 age_group   1  36 2.063892e+01 6.014982e-05     *
+## 5                 condition   2  72 1.587609e+03 2.815489e-60     *
+## 4           group:age_group   1  36 2.626142e-02 8.721697e-01      
+## 6           group:condition   2  72 8.137508e-01 4.472265e-01      
+## 7       age_group:condition   2  72 3.977692e-01 6.732842e-01      
+## 8 group:age_group:condition   2  72 1.598674e+00 2.092564e-01      
+##            ges
+## 2 0.5077066014
+## 3 0.3581354009
+## 5 0.5413227501
+## 4 0.0007094581
+## 6 0.0006045528
+## 7 0.0002956025
+## 8 0.0011869970
+## 
+## $`Mauchly's Test for Sphericity`
+##                      Effect         W        p p<.05
+## 5                 condition 0.8780828 0.102771      
+## 6           group:condition 0.8780828 0.102771      
+## 7       age_group:condition 0.8780828 0.102771      
+## 8 group:age_group:condition 0.8780828 0.102771      
+## 
+## $`Sphericity Corrections`
+##                      Effect       GGe        p[GG] p[GG]<.05       HFe
+## 5                 condition 0.8913313 5.318648e-54         * 0.9345923
+## 6           group:condition 0.8913313 4.352008e-01           0.9345923
+## 7       age_group:condition 0.8913313 6.497733e-01           0.9345923
+## 8 group:age_group:condition 0.8913313 2.119281e-01           0.9345923
+##          p[HF] p[HF]<.05
+## 5 1.686511e-56         *
+## 6 4.401678e-01          
+## 7 6.594669e-01          
+## 8 2.109178e-01
+\end{verbatim}
+
+The ezANOVA() function provides us with more detail, for instance
+automatically providing Maulchy's Test for Sphericity and both the
+Greenhouse-Geisser and Hyun-Feldt corrections in the event that the
+sphericity assumption is violated. Most importantly, the outputs of
+these two functions agree when we look at the f-statistics for all
+main-effects and interactions when sphericity is assumed.
+
+\hypertarget{mixed-factorial-anova-as-a-mixed-effect-model}{%
+\subsection{Mixed Factorial ANOVA as a mixed-effect
+model\ldots{}}\label{mixed-factorial-anova-as-a-mixed-effect-model}}
+
+For this mixed-factorial design, we need to account for the fact that we
+have multiple observations coming from each person, so we will add a
+random-effect of ``subID''. After accounting for this statistical
+dependence in our data, we can now fairly test the effects of Group, Age
+Group, and Condition with residuals that are independent of each other.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# First we will define our model}
+\NormalTok{mod1 <{-}}\StringTok{ }\KeywordTok{lmer}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }
+\StringTok{               }\CommentTok{\# Fixed Effects:}
+\StringTok{               }\NormalTok{group}\OperatorTok{*}\NormalTok{age\_group}\OperatorTok{*}\NormalTok{condition }\OperatorTok{+}\StringTok{ }
+\StringTok{               }\CommentTok{\# Random Effects}
+\StringTok{               }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{subID), }
+               \CommentTok{\# Define your data, }
+             \DataTypeTok{data=}\NormalTok{data\_COND, }\DataTypeTok{REML=}\OtherTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# We can then get the ANOVA results for our model:}
+\KeywordTok{anova}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Type III Analysis of Variance Table with Satterthwaite's method
+##                            Sum Sq Mean Sq NumDF DenDF   F value    Pr(>F)    
+## group                     0.01867 0.01867     1    36   38.1480 4.041e-07 ***
+## age_group                 0.01010 0.01010     1    36   20.6389 6.015e-05 ***
+## condition                 1.55371 0.77686     2    72 1587.6094 < 2.2e-16 ***
+## group:age_group           0.00001 0.00001     1    36    0.0263    0.8722    
+## group:condition           0.00080 0.00040     2    72    0.8138    0.4472    
+## age_group:condition       0.00039 0.00019     2    72    0.3978    0.6733    
+## group:age_group:condition 0.00156 0.00078     2    72    1.5987    0.2093    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+If we want to delve deeper into our model, we can also use the summary()
+function to get more information about model fit statistics, parameter
+estimates, random-effects and residuals.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+## lmerModLmerTest]
+## Formula: speed ~ group * age_group * condition + (1 | subID)
+##    Data: data_COND
+## 
+## REML criterion at convergence: -334.8
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -1.84873 -0.52691 -0.03524  0.48658  1.82075 
+## 
+## Random effects:
+##  Groups   Name        Variance  Std.Dev.
+##  subID    (Intercept) 0.0117005 0.10817 
+##  Residual             0.0004893 0.02212 
+## Number of obs: 120, groups:  subID, 40
+## 
+## Fixed effects:
+##                                Estimate Std. Error        df t value Pr(>|t|)
+## (Intercept)                    0.817351   0.034914 37.992655  23.410  < 2e-16
+## groupT                        -0.221613   0.049376 37.992655  -4.488 6.47e-05
+## age_groupYA                   -0.154073   0.049376 37.992655  -3.120  0.00344
+## conditionB                     0.244157   0.009893 72.000000  24.681  < 2e-16
+## conditionC                    -0.008051   0.009893 72.000000  -0.814  0.41842
+## groupT:age_groupYA             0.003907   0.069828 37.992655   0.056  0.95567
+## groupT:conditionB             -0.001356   0.013990 72.000000  -0.097  0.92305
+## groupT:conditionC              0.011238   0.013990 72.000000   0.803  0.42448
+## age_groupYA:conditionB        -0.022532   0.013990 72.000000  -1.611  0.11166
+## age_groupYA:conditionC        -0.001427   0.013990 72.000000  -0.102  0.91907
+## groupT:age_groupYA:conditionB  0.027420   0.019785 72.000000   1.386  0.17007
+## groupT:age_groupYA:conditionC -0.005651   0.019785 72.000000  -0.286  0.77599
+##                                  
+## (Intercept)                   ***
+## groupT                        ***
+## age_groupYA                   ** 
+## conditionB                    ***
+## conditionC                       
+## groupT:age_groupYA               
+## groupT:conditionB                
+## groupT:conditionC                
+## age_groupYA:conditionB           
+## age_groupYA:conditionC           
+## groupT:age_groupYA:conditionB    
+## groupT:age_groupYA:conditionC    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Correlation of Fixed Effects:
+##             (Intr) groupT ag_gYA cndtnB cndtnC grT:_YA grpT:B grpT:C a_YA:B
+## groupT      -0.707                                                         
+## age_groupYA -0.707  0.500                                                  
+## conditionB  -0.142  0.100  0.100                                           
+## conditionC  -0.142  0.100  0.100  0.500                                    
+## grpT:g_grYA  0.500 -0.707 -0.707 -0.071 -0.071                             
+## grpT:cndtnB  0.100 -0.142 -0.071 -0.707 -0.354  0.100                      
+## grpT:cndtnC  0.100 -0.142 -0.071 -0.354 -0.707  0.100   0.500              
+## ag_grpYA:cB  0.100 -0.071 -0.142 -0.707 -0.354  0.100   0.500  0.250       
+## ag_grpYA:cC  0.100 -0.071 -0.142 -0.354 -0.707  0.100   0.250  0.500  0.500
+## grpT:g_YA:B -0.071  0.100  0.100  0.500  0.250 -0.142  -0.707 -0.354 -0.707
+## grpT:g_YA:C -0.071  0.100  0.100  0.250  0.500 -0.142  -0.354 -0.707 -0.354
+##             a_YA:C gT:_YA:B
+## groupT                     
+## age_groupYA                
+## conditionB                 
+## conditionC                 
+## grpT:g_grYA                
+## grpT:cndtnB                
+## grpT:cndtnC                
+## ag_grpYA:cB                
+## ag_grpYA:cC                
+## grpT:g_YA:B -0.354         
+## grpT:g_YA:C -0.707  0.500
+\end{verbatim}
+
+\hypertarget{mixed-factorial-anova-with-multiple-crossed-factors}{%
+\section{Mixed-Factorial ANOVA with Multiple Crossed
+Factors}\label{mixed-factorial-anova-with-multiple-crossed-factors}}
+
+\hypertarget{multi-way-split-plot-design}{%
+\subsection{(Multi-Way Split-Plot
+Design)}\label{multi-way-split-plot-design}}
+
+Next, we will consider the more complicated example of our fully
+factorial design with nested factors of Group and Age-Group, and crossed
+factors of Condition and Time.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{DATA}\OperatorTok{$}\NormalTok{time <{-}}\StringTok{ }\KeywordTok{factor}\NormalTok{(DATA}\OperatorTok{$}\NormalTok{time)}
+
+\KeywordTok{ggplot}\NormalTok{(DATA, }\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =}\NormalTok{ time, }\DataTypeTok{y =}\NormalTok{ speed)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_point}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{group), }\DataTypeTok{size=}\DecValTok{2}\NormalTok{, }\DataTypeTok{shape=}\DecValTok{21}\NormalTok{,}
+             \DataTypeTok{position=}\KeywordTok{position\_jitterdodge}\NormalTok{(}\DataTypeTok{dodge.width =} \FloatTok{0.5}\NormalTok{))}\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom\_boxplot}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{fill=}\NormalTok{group), }\DataTypeTok{col=}\StringTok{"black"}\NormalTok{, }
+               \DataTypeTok{alpha=}\FloatTok{0.4}\NormalTok{, }\DataTypeTok{width=}\FloatTok{0.5}\NormalTok{)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{facet\_wrap}\NormalTok{(}\OperatorTok{\textasciitilde{}}\NormalTok{condition}\OperatorTok{+}\NormalTok{age\_group)}\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_x\_discrete}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Time"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{scale\_y\_continuous}\NormalTok{(}\DataTypeTok{name =} \StringTok{"Speed (m/s)"}\NormalTok{, }\DataTypeTok{limits =} \KeywordTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{3}\NormalTok{)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{color=}\StringTok{"black"}\NormalTok{), }
+        \DataTypeTok{axis.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{plot.title=}\KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{, }\DataTypeTok{hjust=}\FloatTok{0.5}\NormalTok{),}
+        \DataTypeTok{panel.grid.minor =} \KeywordTok{element\_blank}\NormalTok{(),}
+        \DataTypeTok{strip.text =} \KeywordTok{element\_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{16}\NormalTok{, }\DataTypeTok{face=}\StringTok{"bold"}\NormalTok{),}
+        \DataTypeTok{legend.position =} \StringTok{"right"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{lohse_MER_chapter_02_files/figure-latex/plotting multiple crossed and nested factors-1.pdf}
+
+\hypertarget{as-an-anova-3}{%
+\subsection{As an ANOVA\ldots{}}\label{as-an-anova-3}}
+
+For this mixed factorial ANOVA, we have two factors that vary within
+subjects, Condition and Time, and we have two factors that vary between
+subjects, Age Group and treatment Group0. As before, we can directly
+code this into our analysis of variance using the aov() function or
+using the ezANOVA() function from the ``ez'' package.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(}\KeywordTok{aov}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }\NormalTok{age\_group}\OperatorTok{*}\NormalTok{group}\OperatorTok{*}\NormalTok{condition}\OperatorTok{*}\NormalTok{time }\OperatorTok{+}\StringTok{ }\KeywordTok{Error}\NormalTok{(subID}\OperatorTok{/}\NormalTok{(condition}\OperatorTok{*}\NormalTok{time)), }\DataTypeTok{data=}\NormalTok{DATA))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Error: subID
+##                 Df Sum Sq Mean Sq F value   Pr(>F)    
+## age_group        1  2.938   2.938  20.639 6.01e-05 ***
+## group            1  5.431   5.431  38.148 4.04e-07 ***
+## age_group:group  1  0.004   0.004   0.026    0.872    
+## Residuals       36  5.125   0.142                     
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:condition
+##                           Df Sum Sq Mean Sq  F value Pr(>F)    
+## condition                  2  6.215  3.1074 1587.609 <2e-16 ***
+## age_group:condition        2  0.002  0.0008    0.398  0.673    
+## group:condition            2  0.003  0.0016    0.814  0.447    
+## age_group:group:condition  2  0.006  0.0031    1.599  0.209    
+## Residuals                 72  0.141  0.0020                    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:time
+##                       Df Sum Sq Mean Sq  F value Pr(>F)    
+## time                   3 16.249   5.416 3955.080 <2e-16 ***
+## age_group:time         3  2.585   0.862  629.291 <2e-16 ***
+## group:time             3  0.002   0.001    0.491  0.689    
+## age_group:group:time   3  0.007   0.002    1.649  0.182    
+## Residuals            108  0.148   0.001                    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+## 
+## Error: subID:condition:time
+##                                 Df Sum Sq Mean Sq F value  Pr(>F)    
+## condition:time                   6 1.7004 0.28340 221.120 < 2e-16 ***
+## age_group:condition:time         6 0.0107 0.00179   1.393 0.21858    
+## group:condition:time             6 0.0241 0.00401   3.130 0.00581 ** 
+## age_group:group:condition:time   6 0.0098 0.00163   1.274 0.27037    
+## Residuals                      216 0.2768 0.00128                    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{ezANOVA}\NormalTok{(}\DataTypeTok{data =}\NormalTok{ DATA, }
+    \DataTypeTok{dv =}\NormalTok{ .(speed),}
+    \DataTypeTok{wid =}\NormalTok{ .(subID),}
+    \DataTypeTok{within =}\NormalTok{ .(condition, time),}
+    \DataTypeTok{between =}\NormalTok{ .(group, age\_group)}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## $ANOVA
+##                            Effect DFn DFd            F             p p<.05
+## 2                           group   1  36 3.814802e+01  4.041332e-07     *
+## 3                       age_group   1  36 2.063892e+01  6.014982e-05     *
+## 5                       condition   2  72 1.587609e+03  2.815489e-60     *
+## 9                            time   3 108 3.955080e+03 3.170785e-110     *
+## 4                 group:age_group   1  36 2.626142e-02  8.721697e-01      
+## 6                 group:condition   2  72 8.137508e-01  4.472265e-01      
+## 7             age_group:condition   2  72 3.977692e-01  6.732842e-01      
+## 10                     group:time   3 108 4.906913e-01  6.894742e-01      
+## 11                 age_group:time   3 108 6.292907e+02  3.217441e-68     *
+## 13                 condition:time   6 216 2.211196e+02  2.717341e-89     *
+## 8       group:age_group:condition   2  72 1.598674e+00  2.092564e-01      
+## 12           group:age_group:time   3 108 1.648921e+00  1.824147e-01      
+## 14           group:condition:time   6 216 3.130282e+00  5.810192e-03     *
+## 15       age_group:condition:time   6 216 1.393005e+00  2.185833e-01      
+## 16 group:age_group:condition:time   6 216 1.274136e+00  2.703707e-01      
+##             ges
+## 2  0.4883169213
+## 3  0.3405069457
+## 5  0.5220105678
+## 9  0.7406180507
+## 4  0.0006565407
+## 6  0.0005594557
+## 7  0.0002735456
+## 10 0.0003541227
+## 11 0.3123878323
+## 13 0.2300612092
+## 8  0.0010984999
+## 12 0.0011890012
+## 14 0.0042122123
+## 15 0.0018788668
+## 16 0.0017188131
+## 
+## $`Mauchly's Test for Sphericity`
+##                            Effect         W          p p<.05
+## 5                       condition 0.8780828 0.10277095      
+## 6                 group:condition 0.8780828 0.10277095      
+## 7             age_group:condition 0.8780828 0.10277095      
+## 8       group:age_group:condition 0.8780828 0.10277095      
+## 9                            time 0.7072129 0.03448091     *
+## 10                     group:time 0.7072129 0.03448091     *
+## 11                 age_group:time 0.7072129 0.03448091     *
+## 12           group:age_group:time 0.7072129 0.03448091     *
+## 13                 condition:time 0.6121757 0.68203573      
+## 14           group:condition:time 0.6121757 0.68203573      
+## 15       age_group:condition:time 0.6121757 0.68203573      
+## 16 group:age_group:condition:time 0.6121757 0.68203573      
+## 
+## $`Sphericity Corrections`
+##                            Effect       GGe        p[GG] p[GG]<.05       HFe
+## 5                       condition 0.8913313 5.318648e-54         * 0.9345923
+## 6                 group:condition 0.8913313 4.352008e-01           0.9345923
+## 7             age_group:condition 0.8913313 6.497733e-01           0.9345923
+## 8       group:age_group:condition 0.8913313 2.119281e-01           0.9345923
+## 9                            time 0.8080836 1.443619e-89         * 0.8706410
+## 10                     group:time 0.8080836 6.498993e-01           0.8706410
+## 11                 age_group:time 0.8080836 1.282083e-55         * 0.8706410
+## 12           group:age_group:time 0.8080836 1.924731e-01           0.8706410
+## 13                 condition:time 0.8808334 5.733986e-79         * 1.0502199
+## 14           group:condition:time 0.8808334 8.446041e-03         * 1.0502199
+## 15       age_group:condition:time 0.8808334 2.259596e-01           1.0502199
+## 16 group:age_group:condition:time 0.8808334 2.751532e-01           1.0502199
+##           p[HF] p[HF]<.05
+## 5  1.686511e-56         *
+## 6  4.401678e-01          
+## 7  6.594669e-01          
+## 8  2.109178e-01          
+## 9  2.659387e-96         *
+## 10 6.637492e-01          
+## 11 9.995687e-60         *
+## 12 1.892283e-01          
+## 13 2.717341e-89         *
+## 14 5.810192e-03         *
+## 15 2.185833e-01          
+## 16 2.703707e-01
+\end{verbatim}
+
+As illustrated in the figure, these results show main-effects of\ldots{}
+
+\hypertarget{multi-way-mixed-factorial-anova-as-a-mixed-effect-model}{%
+\subsection{Multi-Way Mixed Factorial ANOVA as a mixed-effect
+model\ldots{}}\label{multi-way-mixed-factorial-anova-as-a-mixed-effect-model}}
+
+For this mixed-factorial design, we need to account for the fact that we
+have multiple observations coming from each person, but we also need to
+acocunt for the fact that we multiple observations for each Condition
+and at each Time. In order to account for this non-independence in our
+data, we need to include random-effects of subject, subject:condition,
+and subject:time. Adding these random-effects to our model will make our
+mixed-effects model statistically equivalent to the mixed-factorial
+ANOVAs that we ran above.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# First we will define our model}
+\NormalTok{mod1 <{-}}\StringTok{ }\KeywordTok{lmer}\NormalTok{(speed }\OperatorTok{\textasciitilde{}}\StringTok{ }
+\StringTok{               }\CommentTok{\# Fixed Effects:}
+\StringTok{               }\NormalTok{group}\OperatorTok{*}\NormalTok{age\_group}\OperatorTok{*}\NormalTok{condition}\OperatorTok{*}\NormalTok{time }\OperatorTok{+}\StringTok{ }
+\StringTok{               }\CommentTok{\# Random Effects}
+\StringTok{               }\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{subID)}\OperatorTok{+}\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{condition}\OperatorTok{:}\NormalTok{subID)}\OperatorTok{+}\NormalTok{(}\DecValTok{1}\OperatorTok{|}\NormalTok{time}\OperatorTok{:}\NormalTok{subID), }
+               \CommentTok{\# Define your data, }
+             \DataTypeTok{data=}\NormalTok{DATA, }\DataTypeTok{REML=}\OtherTok{TRUE}\NormalTok{)}
+
+\CommentTok{\# We can then get the ANOVA results for our model:}
+\KeywordTok{anova}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Type III Analysis of Variance Table with Satterthwaite's method
+##                                 Sum Sq Mean Sq NumDF   DenDF   F value
+## group                           0.0489  0.0489     1  36.006   38.1520
+## age_group                       0.0265  0.0265     1  36.006   20.6411
+## condition                       4.0703  2.0351     2  72.006 1587.8724
+## time                           15.2054  5.0685     3 108.085 3954.5396
+## group:age_group                 0.0000  0.0000     1  36.006    0.0263
+## group:condition                 0.0021  0.0010     2  72.006    0.8139
+## age_group:condition             0.0010  0.0005     2  72.006    0.3978
+## group:time                      0.0019  0.0006     3 108.085    0.4906
+## age_group:time                  2.4193  0.8064     3 108.085  629.2047
+## condition:time                  1.7004  0.2834     6 216.095  221.1186
+## group:age_group:condition       0.0041  0.0020     2  72.006    1.5989
+## group:age_group:time            0.0063  0.0021     3 108.085    1.6487
+## group:condition:time            0.0241  0.0040     6 216.095    3.1303
+## age_group:condition:time        0.0107  0.0018     6 216.095    1.3930
+## group:age_group:condition:time  0.0098  0.0016     6 216.095    1.2741
+##                                   Pr(>F)    
+## group                          4.035e-07 ***
+## age_group                      6.009e-05 ***
+## condition                      < 2.2e-16 ***
+## time                           < 2.2e-16 ***
+## group:age_group                  0.87216    
+## group:condition                  0.44717    
+## age_group:condition              0.67324    
+## group:time                       0.68952    
+## age_group:time                 < 2.2e-16 ***
+## condition:time                 < 2.2e-16 ***
+## group:age_group:condition        0.20920    
+## group:age_group:time             0.18246    
+## group:condition:time             0.00581 ** 
+## age_group:condition:time         0.21858    
+## group:age_group:condition:time   0.27037    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+If we want to delve deeper into our model, we can also use the summary()
+function to get more information about model fit statistics, parameter
+estimates, random-effects and residuals.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(mod1)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Linear mixed model fit by REML. t-tests use Satterthwaite's method [
+## lmerModLmerTest]
+## Formula: speed ~ group * age_group * condition * time + (1 | subID) +  
+##     (1 | condition:subID) + (1 | time:subID)
+##    Data: DATA
+## 
+## REML criterion at convergence: -1333.2
+## 
+## Scaled residuals: 
+##      Min       1Q   Median       3Q      Max 
+## -2.43548 -0.59557  0.01037  0.52619  2.51202 
+## 
+## Random effects:
+##  Groups          Name        Variance  Std.Dev.
+##  time:subID      (Intercept) 2.932e-05 0.005415
+##  condition:subID (Intercept) 1.688e-04 0.012993
+##  subID           (Intercept) 1.169e-02 0.108129
+##  Residual                    1.282e-03 0.035801
+## Number of obs: 480, groups:  time:subID, 160; condition:subID, 120; subID, 40
+## 
+## Fixed effects:
+##                                       Estimate Std. Error         df t value
+## (Intercept)                          8.956e-01  3.629e-02  4.434e+01  24.677
+## groupT                              -1.935e-01  5.133e-02  4.434e+01  -3.769
+## age_groupYA                          1.203e-01  5.133e-02  4.434e+01   2.344
+## conditionB                           4.485e-01  1.703e-02  2.768e+02  26.333
+## conditionC                           3.200e-02  1.703e-02  2.768e+02   1.879
+## time2                               -4.860e-02  1.619e-02  3.237e+02  -3.002
+## time3                               -1.224e-01  1.619e-02  3.237e+02  -7.557
+## time4                               -1.420e-01  1.619e-02  3.237e+02  -8.769
+## groupT:age_groupYA                  -1.367e-02  7.259e-02  4.434e+01  -0.188
+## groupT:conditionB                   -8.582e-03  2.409e-02  2.768e+02  -0.356
+## groupT:conditionC                   -2.316e-02  2.409e-02  2.768e+02  -0.962
+## age_groupYA:conditionB              -4.019e-02  2.409e-02  2.768e+02  -1.669
+## age_groupYA:conditionC              -3.111e-02  2.409e-02  2.768e+02  -1.291
+## groupT:time2                        -2.301e-02  2.290e-02  3.237e+02  -1.005
+## groupT:time3                        -3.381e-02  2.290e-02  3.237e+02  -1.477
+## groupT:time4                        -5.576e-02  2.290e-02  3.237e+02  -2.435
+## age_groupYA:time2                   -3.022e-01  2.290e-02  3.237e+02 -13.197
+## age_groupYA:time3                   -3.926e-01  2.290e-02  3.237e+02 -17.144
+## age_groupYA:time4                   -4.026e-01  2.290e-02  3.237e+02 -17.583
+## conditionB:time2                    -1.732e-01  2.264e-02  2.161e+02  -7.647
+## conditionC:time2                    -3.135e-02  2.264e-02  2.161e+02  -1.384
+## conditionB:time3                    -2.734e-01  2.264e-02  2.161e+02 -12.074
+## conditionC:time3                    -5.911e-02  2.264e-02  2.161e+02  -2.611
+## conditionB:time4                    -3.709e-01  2.264e-02  2.161e+02 -16.379
+## conditionC:time4                    -6.975e-02  2.264e-02  2.161e+02  -3.081
+## groupT:age_groupYA:conditionB        2.358e-03  3.406e-02  2.768e+02   0.069
+## groupT:age_groupYA:conditionC       -4.444e-03  3.406e-02  2.768e+02  -0.130
+## groupT:age_groupYA:time2             1.376e-02  3.239e-02  3.237e+02   0.425
+## groupT:age_groupYA:time3             1.484e-02  3.239e-02  3.237e+02   0.458
+## groupT:age_groupYA:time4             4.169e-02  3.239e-02  3.237e+02   1.287
+## groupT:conditionB:time2              6.052e-03  3.202e-02  2.161e+02   0.189
+## groupT:conditionC:time2             -1.733e-02  3.202e-02  2.161e+02  -0.541
+## groupT:conditionB:time3             -1.778e-02  3.202e-02  2.161e+02  -0.555
+## groupT:conditionC:time3              6.519e-02  3.202e-02  2.161e+02   2.036
+## groupT:conditionB:time4              4.063e-02  3.202e-02  2.161e+02   1.269
+## groupT:conditionC:time4              8.973e-02  3.202e-02  2.161e+02   2.802
+## age_groupYA:conditionB:time2         3.471e-02  3.202e-02  2.161e+02   1.084
+## age_groupYA:conditionC:time2         1.141e-02  3.202e-02  2.161e+02   0.356
+## age_groupYA:conditionB:time3        -1.168e-04  3.202e-02  2.161e+02  -0.004
+## age_groupYA:conditionC:time3         3.155e-02  3.202e-02  2.161e+02   0.985
+## age_groupYA:conditionB:time4         3.605e-02  3.202e-02  2.161e+02   1.126
+## age_groupYA:conditionC:time4         7.577e-02  3.202e-02  2.161e+02   2.366
+## groupT:age_groupYA:conditionB:time2  2.695e-02  4.528e-02  2.161e+02   0.595
+## groupT:age_groupYA:conditionC:time2  4.804e-02  4.528e-02  2.161e+02   1.061
+## groupT:age_groupYA:conditionB:time3  5.800e-02  4.528e-02  2.161e+02   1.281
+## groupT:age_groupYA:conditionC:time3 -9.709e-03  4.528e-02  2.161e+02  -0.214
+## groupT:age_groupYA:conditionB:time4  1.529e-02  4.528e-02  2.161e+02   0.338
+## groupT:age_groupYA:conditionC:time4 -4.316e-02  4.528e-02  2.161e+02  -0.953
+##                                     Pr(>|t|)    
+## (Intercept)                          < 2e-16 ***
+## groupT                               0.00048 ***
+## age_groupYA                          0.02364 *  
+## conditionB                           < 2e-16 ***
+## conditionC                           0.06132 .  
+## time2                                0.00290 ** 
+## time3                               4.28e-13 ***
+## time4                                < 2e-16 ***
+## groupT:age_groupYA                   0.85153    
+## groupT:conditionB                    0.72189    
+## groupT:conditionC                    0.33714    
+## age_groupYA:conditionB               0.09633 .  
+## age_groupYA:conditionC               0.19764    
+## groupT:time2                         0.31564    
+## groupT:time3                         0.14075    
+## groupT:time4                         0.01543 *  
+## age_groupYA:time2                    < 2e-16 ***
+## age_groupYA:time3                    < 2e-16 ***
+## age_groupYA:time4                    < 2e-16 ***
+## conditionB:time2                    6.66e-13 ***
+## conditionC:time2                     0.16764    
+## conditionB:time3                     < 2e-16 ***
+## conditionC:time3                     0.00967 ** 
+## conditionB:time4                     < 2e-16 ***
+## conditionC:time4                     0.00233 ** 
+## groupT:age_groupYA:conditionB        0.94486    
+## groupT:age_groupYA:conditionC        0.89629    
+## groupT:age_groupYA:time2             0.67115    
+## groupT:age_groupYA:time3             0.64718    
+## groupT:age_groupYA:time4             0.19889    
+## groupT:conditionB:time2              0.85027    
+## groupT:conditionC:time2              0.58897    
+## groupT:conditionB:time3              0.57924    
+## groupT:conditionC:time3              0.04300 *  
+## groupT:conditionB:time4              0.20580    
+## groupT:conditionC:time4              0.00553 ** 
+## age_groupYA:conditionB:time2         0.27963    
+## age_groupYA:conditionC:time2         0.72204    
+## age_groupYA:conditionB:time3         0.99709    
+## age_groupYA:conditionC:time3         0.32562    
+## age_groupYA:conditionB:time4         0.26144    
+## age_groupYA:conditionC:time4         0.01886 *  
+## groupT:age_groupYA:conditionB:time2  0.55238    
+## groupT:age_groupYA:conditionC:time2  0.28992    
+## groupT:age_groupYA:conditionB:time3  0.20163    
+## groupT:age_groupYA:conditionC:time3  0.83044    
+## groupT:age_groupYA:conditionB:time4  0.73589    
+## groupT:age_groupYA:conditionC:time4  0.34161    
+## ---
+## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+\end{verbatim}
+
+\begin{verbatim}
+## 
+## Correlation matrix not shown by default, as p = 48 > 12.
+## Use print(x, correlation=TRUE)  or
+##     vcov(x)        if you need it
+\end{verbatim}
+
+
+\end{document}
