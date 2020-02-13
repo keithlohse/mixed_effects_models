@@ -1,208 +1,145 @@
 ---
 title: "Chapter 1: An Introduction to Mixed-Effect Models"
 author: "Keith Lohse, PhD, PStat"
-date: "1/30/2020"
+date: "2020-02-12"
 output:
   html_document:
     df_print: paged
 ---
 
-# Mixed-Effect Models as an Analogue for Multi-Factorial ANOVA
+# What are mixed-effects models?
 
-For these examples, we are going to work with a fictional data that that has two 
-fully nested (i.e., between-subjects) and two fully crossed (i.e., within-subject)
-factors. We have two hypothetical groups of older adults (OA, >65 y) and younger 
-adults (YA, <35 y). Within each of those groups, half of the participants were
-in the control group (C) and half were in the treatment group (T). Each participant 
-was also measured at three different times (1 to 3) in three different conditions 
-(A, B, and C). The first ten rows of these data can be seen below. 
+In a traditional general linear models (GLM), all of our data are independent (i.e., one data point per person). Statistically, we can write this as a linear model like: 
+$$y_i=\beta_0+\beta_1(Time_i)+\epsilon_i$$
 
+Each subject's actual score ($y_i$) is the result of an intercept ($\beta_0$) and that constant is modified based on Time (the slope, $\beta_1$ multiplied by the Time variable). The intercept and slope are collectively referred to as our statistical *MODEL*. Our model is not going to be perfect, however, so we need to include an error term ($\epsilon_i$). Good models will have small errors and thus be a better approximation of our *DATA*. As such, we can more generally say that:
+$$Data_i = Model_i + Error_i $$
 
-```{r, setting libraries, results="hide", message = FALSE}
+Mixed-effect regressions are an extension of the general linear model, but they include *random-effects* in addition to the more traditional *fixed-effects* of our models. These random-effecs allow us to account for statistical dependencies in our data. For instance, consider the following situation:
+```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
 library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
 
-```
-
-``` {r, print data to screen}
-head(DATA, 10)
-
-```
-
-Because we will want to ignore each of the within-subject variables at different 
-times, we will want to average across trials to create a data set with one 
-observation per condition (data_COND), and we will want to average across conditions
-to create a data set with one observation at each time (data_TIME).
-
-Averaging across time, here are the first ten rows of data_COND. 
-```{r, subsetting data by condition}
-data_COND <- aggregate(speed ~ subID + condition + age_group + group, data=DATA, FUN=mean)
-data_COND <- data_COND %>% arrange(subID, age_group, group, condition)
-head(data_COND, 10)
-```
-
-Averaging across condiitons, here are the first ten rows of data_TIME. 
-``` {r, subsetting data by time}
 data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
 data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
 head(data_TIME)
 ```
 
-# One-Way Repeated Measures ANOVA (A Single Crossed Factor)
-For this example, we will focus on only the effect of condition, so we will use 
-the data_COND dataset to average across different trials. First, let's plot the 
-data to get a better sense of what our data are saying. 
-
-
-``` {r plotting the effects of condition, echo=TRUE}
-ggplot(data_COND, aes(x = condition, y = speed)) +
-  geom_point(aes(fill=condition), pch=21, size=2,
-             position=position_jitter(w=0.2, h=0))+
-  geom_boxplot(aes(fill=condition), col="black", outlier.shape = "na",
-               alpha=0.4, width=0.5)+
-  scale_x_discrete(name = "Condition") +
-  scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
+``` {r plotting the effects of time, echo=FALSE}
+ggplot(data_TIME, aes(x = time, y = speed)) +
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  geom_line(aes(col=subID), alpha=0.4)+
+  facet_wrap(~age_group) +
+  scale_x_continuous(name = "Trial") +
+  scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
-        panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
         legend.position = "none")
   
 ```
 
-## As an ANOVA...
-To implement a simple one-way repeated measures ANOVA, we have a few options. We 
-could directly code our ANOVA using the aov() function in R:
-``` {r one way ANOVA the hard way, echo=TRUE}
-summary(aov(speed ~ condition + Error(subID/condition), data=data_COND))
-```
+These hypothetical data come from a cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiey provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower.
 
-Or we can use the ezANOVA() function from the "ez" package. 
-```{r one way ANOVA the ez way, echo=TRUE}
-ezANOVA(data = data_COND, 
-    dv = .(speed),
-    wid = .(subID),
-    within = .(condition)
-)
-```
-Although these two different functions present the results in a slightly different
-ways, not that the f-values for the two different omnibus tests match. By either 
-method, the f-observed for the main-effect of condition is F(2,158) = 68.86, p < 0.001. 
+It would be tempting to model these data using our traditional GLM where there was a fixed-effect of time. However, that would ignore the fact that time varies within each person and this violates one of our primary regression assumptions: that residuals are *independent* of each other. 
 
-If you are familiar with issues of contrast versus treatment coding, Type I
-versus Type III sums of squared errors, and colinearity then directly controlling
-your own ANOVA using base R is probably a safe bet. If you are not familiar with
-those terms/issues, that the ezANOVA code is probably the best solution for a quick
-fix, but I would strongly encourage you to development a more detailed understanding
-of general-linear models before jumping into mixed-effect models. 
+To ensure that we have independent residuals, we need to account for the fact that we have multiple observations per person. To do this, we can add a random-effect of subject:
+$$y_{ij}=\beta_0+U_{0j}+\beta_1(Time_{ij})+\epsilon_{ij}$$
+The random-effect of subject ($U_j$) allows each subject to have a separate intercept ($\beta_0+U_{0j}$). As such, we would refer to this model as a *random-intercepts; fixed-slope* model, because even though each subject has a unique intercept all subjects would have the same slope ($\beta_1$). 
 
+If we wanted to estimate a unique trajectory (i.e, slope) for each subject, then we we would need to add a random-slope to our model: 
+$$y_{ij}=\beta_0+\beta_1(Time_{ij})+U_{0j}+U_{1j}(Time_{ij})+\epsilon_{ij}$$
+To show the effects specifically on the slopes and intercepts, this equation can be rewritten as:
+$$y_{ij}=(\beta_0+U_{0j})+(\beta_1+U_{1j})(Time_{ij})+\epsilon_{ij}$$
 
-## One-way RM ANOVA as a mixed-effect model...
-Because we only have a single within-subject factor, we will only need to add a 
-random-effect of subject to account for individual differences between subjects.
-By partitioning the between-subjects variance out of our model, we can fairly test
-the effect of condition, because our residuals will now be independent of each
-other. 
-```{r one way another in a mixed effects model, echo=TRUE}
-# First we will define our model
-mod1 <- lmer(speed ~ condition + (1|subID), data=data_COND)
+In this *random-intercepts; random-slopes* model, we estimate a unique trajectory for each person ($(\beta_1+U_{1j})(Time_{ij})$). Visually, that model would look something like this:
 
-# We can then get the ANOVA results for our model:
-anova(mod1)
-```
-
-If we want to delve deeper into our model, we can also use the summary() function
-to get more information about model fit statistics, parameter estimates, random-effects
-and residuals. 
-
-```{r}
-summary(mod1)
-```
-
-
-
-
-
-
-
-# Two-Way Repeated Measures ANOVA (Multiple Crossed Factors)
-For this example, we will be analyzing both Time and Condition, so we will use 
-our original full data framge, DATA. First, let's plot the data to get a better 
-sense of what our data look like.
-
-``` {r plotting two repeated measures}
-ggplot(DATA, aes(x = as.factor(time), y = speed)) +
-  geom_point(aes(fill=condition), pch=21, size=2,
-             position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=condition), col="black", outlier.shape = "na",
-               alpha=0.4, width=0.5)+
-  scale_x_discrete(name = "Time") +
-  scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
+``` {r time by group, echo=FALSE}
+ggplot(data_TIME, aes(x = time, y = speed)) +
+  stat_smooth(aes(col=subID, lty=age_group), method="lm", se=FALSE, alpha=0.4)+
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  stat_smooth(aes(lty=age_group), method="lm", col="black", lwd=1.5,
+              se=FALSE, alpha=0.4)+
+  facet_wrap(~age_group) +
+  scale_x_continuous(name = "Trial") +
+  scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
-        panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
-``` 
-
-
-## As an ANOVA...
-Before we run our models, we want to convert time to a factor so that our model
-is treating time categorically rather than continuously. (In later modules, we 
-will discuss how to mix continuous and categorical factors.) Additionally, remember
-that we are now using our larger data set "DATA" rather than our aggregated data
-set "data_COND". To implement a two-way repeated measures ANOVA, we have the same 
-options as before. We can directly code our ANOVA using the aov() function in R:
-``` {r two way ANOVA the hard way, echo=TRUE}
-DATA$time <- factor(DATA$time)
-summary(aov(speed ~ condition*time + Error(subID/(condition*time)), data=DATA))
+        legend.position = "none")
+  
 ```
 
-Or we can use the ezANOVA() function from the "ez" package. 
-```{r two way ANOVA the ez way, echo=TRUE}
-ezANOVA(data = DATA, 
-    dv = .(speed),
-    wid = .(subID),
-    within = .(time, condition)
-)
-```
-Again, regardless of the coding approach that you use, these two different functions 
-produce the same f-observed for the main-effect of time, F(2,158) = 676.1, p < 0.001. 
+Linear trajectories for each group are plotted as solid lines (older adults) and dashed lines (younger adults). The thick black lines represent the group level trajectories ($\beta_0 +\beta_1(Time_{ij})$) in group. The estimated trajectories for each subject are color-coded based on the individual subjects. The intercepts for these lines are captured by the group-level intercept plus the individual distance from that intercept ($\beta_0+U_{0j}$). The slopes for these lines are captured by the group-level slope plus the individual distance from that slope ($(\beta_1+U_{1j})(Time_{ij})$). Note that these random-effects ($U$'s) could be positive or negative, because they represent how this participant deviates from the norm. Thus, our *mixed-effects* MODEL is the combination of our fixed-effects (all of the $\beta$'s) and the random-effects (all of the $U_j$'s). However, $DATA = MODEL + ERROR$ still applies, so we need to include a random-error term for each data point, $ϵ_{ij}$.
 
- 
+In summary, we have the following terms to explain our *DATA*:
+    * The *MODEL* includes fixed effects and random effects.
+    * Fixed-Effects are the group-level $\beta$'s, these effects parallel the traditional main-effects and interactions that you have probably encountered in other statistical analyses.
+    * Random-Effects are the participant-level $U_j$'s that remove statistical dependency from our data. (This is bit of a simplification, but you can think of not including the appropriate random-effects like running a between-subjects ANOVA when you should be running a repeated-measures ANOVA.)
+    * The *ERRORS*, or more specifically Random Errors, are the difference between our *MODEL*'s predictions and the actual *DATA*, $\epsilon_{ij}$'s.
 
 
-## Two-way RM ANOVA as a mixed-effect model...
-Because we now have two crossed factors, we need to not only account for the fact 
-that we have multiple observations for each participant, but we need to account 
-for multiple observations coming from other factors. For instance, for the effect
-of Condition, we actually have condition effects at Time A, Time B, and Time C. 
-The converse is also true for the effect of Time, we have effects of Time in
-Condition A, Condition B, and Condition C. Thus, in order to appropriately 
-account for the statistical dependencies in our data, we need to add random-effects
-of "time:subID" and "condition:subID" to the model. 
+# Advantages of Mixed-Effects Regression:
+* **Model concept**
+    - **RM ANOVA**:
+        * Compares means of a continuous outcome stratified by one or more categorical variable(s) to the grand mean. 
+        *	Individuals are treated as a factor with error aggregated from each individual’s mean of repeated measures and partitioned as intra-individual variance from the error term.
 
-```{r two way another in a mixed effects model, echo=TRUE}
-# First we will define our model
-mod1 <- lmer(speed ~ 
-               # Fixed Effects:
-               time*condition + 
-               # Random Effects
-               (1|subID)+ (1|time:subID) + (1|condition:subID), 
-               # Define your data, 
-             data=DATA)
+    - **Mixed-Effects Regression**:
+        *	Accounts for correlations in data with clustered or nested structure. 
+        * In longitudinal models, change over time is considered a within-person factor accounting for within-person correlations across time points and estimating error as residuals from each individual’s trajectory, and between-person error is accounted for as random effects in a correlation matrix, which can be explained by fixed covariate associations with trajectory parameters.
+            
+* **Modeling of the outcome over time**
+    - **RM ANOVA**:
+        *	Addresses questions about mean difference.
+        *	Time is not inherently captured in the repeated measure, instead discrete time points are treated as levels of a categorical variable with a mean for each time point.
+        *	Mean differences between time points do not represent change over time, since time is an not explicit part of the model.
 
-# We can then get the ANOVA results for our model:
-anova(mod1)
-```
+    - **Mixed-Effects Regression**:
+        *	Time is modeled explicitly for the outcome variable as a trajectory of change. 
+        *	The model assumes a common pattern of change for the group (fixed effects), but individuals can vary from that pattern (random effects).
+        * The shape of the trajectory is determined by fitting progressively more complex mathematical functions that are likely to fit the pattern of raw data scores, and testing a fit statistic (e.g., Akaike Information Criterion or Bayesian Information Criterion).
+        * Of particular use is the ability to estimate the magnitude and timing of a plateau or other milestone on the trajectory. 
 
-If we want to delve deeper into our model, we can also use the summary() function
-to get more information about model fit statistics, parameter estimates, random-effects
-and residuals. 
+* **Variability in timing of data points**
+    - **RM ANOVA**:
+        *	Requires common, discreet time points; variability in actual timing may contribute to measurement error in categorized time points. 
+        * Measurement error may accrue within time points if outcome measurement varies by time within a time point, e.g., measurement at a time point varies by ± time units around that point. Individuals’ scores on an increasing trajectory may be overestimated if captured before the time point or underestimated if captured after.  
 
-```{r}
-summary(mod1)
-```
+    - **Mixed-Effects Regression**:
+        *	Can accommodate variability in spacing of time points and in the actual timing of individual data collection. 
+        *	Time points can be spaced farther apart where little change is expected, and closer together where more change is expected. 
+        * Individual measurement can vary from the target time points. If, for example, 5 weekly measurements are planned over 4 weeks, a time variable defined in days can capture the actual day of measurement, rather than collapsing to the weekly time point. 
+
+* **Data missing on the outcome**
+    - **RM ANOVA**:
+        *	Missing outcome data cannot be accommodated, without complicated statistical adjustments (such as multiple imputation) when data are missing at random. 
+        * Including only cases with complete data will reduce statistical power and risk bias to the model if data are missing not at random (MNAR).
+        * Depending on the method employed, imputing missing values may not bias parameter estimates, but may reduce standard errors risking Type I errors in hypothesis tests.
+
+    - **Mixed-Effects Regression**:
+        *	Data that is if missing at random (MAR) can be accommodated without excluding cases.
+        * However, models can be biased if important time points are missing (e.g., no data where important change occurs). 
+        * Models with data that is MNAR can be fit, but models may be biased. For example, an unbalanced data set is one in which later time points are more likely to be missing, which can occur due to drop out, or outcome measurement that is performed during an intervention that varies for individuals. 
+        * Imputation of outcome data is generally not recommended.
+
+* **Data missing on covariates**
+    - **RM ANOVA**:
+        *	Missing between-person covariate data cannot be accommodated. 
+        * Cases are either dropped from analysis or retained by imputing missing values.
+
+    - **Mixed-Effects Regression**:
+        *	Missing between-person covariate data cannot be accommodated.  
+        *	Cases are either dropped from analysis or retained by imputing missing values.
+        
+* **Time-varying covariates**
+    - **RM ANOVA**:
+        *	Time varying covariates cannot be accommodated in a RM ANOVA model.
+            
+    - **Mixed-Effects Regression**:
+        * Time varying covariates can be included, but you need to careful about collinearity and variance at both the between- and within-subject levels.
+
+
