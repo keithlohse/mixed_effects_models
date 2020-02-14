@@ -1,7 +1,7 @@
 ---
 title: "Chapter 1: An Introduction to Mixed-Effect Models"
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-12"
+date: "2020-02-14"
 output:
   html_document:
     df_print: paged
@@ -9,7 +9,7 @@ output:
 
 # What are mixed-effects models?
 
-In a traditional general linear models (GLM), all of our data are independent (i.e., one data point per person). Statistically, we can write this as a linear model like: 
+In a traditional general linear model (GLM), all of our data are independent (i.e., one data point per person). Statistically, we can write this as a linear model like: 
 $$y_i=\beta_0+\beta_1(Time_i)+\epsilon_i$$
 
 Each subject's actual score ($y_i$) is the result of an intercept ($\beta_0$) and that constant is modified based on Time (the slope, $\beta_1$ multiplied by the Time variable). The intercept and slope are collectively referred to as our statistical *MODEL*. Our model is not going to be perfect, however, so we need to include an error term ($\epsilon_i$). Good models will have small errors and thus be a better approximation of our *DATA*. As such, we can more generally say that:
@@ -26,7 +26,7 @@ data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
 head(data_TIME)
 ```
 
-``` {r plotting the effects of time, echo=FALSE}
+``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   geom_point(aes(fill=subID), pch=21, size=2)+
   geom_line(aes(col=subID), alpha=0.4)+
@@ -56,7 +56,7 @@ $$y_{ij}=(\beta_0+U_{0j})+(\beta_1+U_{1j})(Time_{ij})+\epsilon_{ij}$$
 
 In this *random-intercepts; random-slopes* model, we estimate a unique trajectory for each person ($(\beta_1+U_{1j})(Time_{ij})$). Visually, that model would look something like this:
 
-``` {r time by group, echo=FALSE}
+``` {r time by group, echo=FALSE, fig.align="center"}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   stat_smooth(aes(col=subID, lty=age_group), method="lm", se=FALSE, alpha=0.4)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -76,13 +76,49 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
 Linear trajectories for each group are plotted as solid lines (older adults) and dashed lines (younger adults). The thick black lines represent the group level trajectories ($\beta_0 +\beta_1(Time_{ij})$) in group. The estimated trajectories for each subject are color-coded based on the individual subjects. The intercepts for these lines are captured by the group-level intercept plus the individual distance from that intercept ($\beta_0+U_{0j}$). The slopes for these lines are captured by the group-level slope plus the individual distance from that slope ($(\beta_1+U_{1j})(Time_{ij})$). Note that these random-effects ($U$'s) could be positive or negative, because they represent how this participant deviates from the norm. Thus, our *mixed-effects* MODEL is the combination of our fixed-effects (all of the $\beta$'s) and the random-effects (all of the $U_j$'s). However, $DATA = MODEL + ERROR$ still applies, so we need to include a random-error term for each data point, $ϵ_{ij}$.
 
 In summary, we have the following terms to explain our *DATA*:
-    * The *MODEL* includes fixed effects and random effects.
-    * Fixed-Effects are the group-level $\beta$'s, these effects parallel the traditional main-effects and interactions that you have probably encountered in other statistical analyses.
-    * Random-Effects are the participant-level $U_j$'s that remove statistical dependency from our data. (This is bit of a simplification, but you can think of not including the appropriate random-effects like running a between-subjects ANOVA when you should be running a repeated-measures ANOVA.)
-    * The *ERRORS*, or more specifically Random Errors, are the difference between our *MODEL*'s predictions and the actual *DATA*, $\epsilon_{ij}$'s.
 
+1. The *MODEL* includes fixed effects and random effects.
+2. Fixed-Effects are the group-level $\beta$'s, these effects parallel the traditional main-effects and interactions that you have probably encountered in other statistical analyses.
+3. Random-Effects are the participant-level $U_j$'s that remove statistical dependency from our data. (This is bit of a simplification, but you can think of not including the appropriate random-effects like running a between-subjects ANOVA when you should be running a repeated-measures ANOVA.)
+4. The *ERRORS*, or more specifically Random Errors, are the difference between our *MODEL*'s predictions and the actual *DATA*, $\epsilon_{ij}$'s.
 
-# Advantages of Mixed-Effects Regression:
+## But our model doesn't look very linear? 
+Correct! In looking at the figures, it certainly doesn't look like a straight line is the best description our data. There appear to be diminishing returns in the effect of trial, there is a large reduction in velocity from Trial 1 to Trial 2, but that reduction gets smaller to Trial 3 and to Trial 4. Mathematically, we could try explain this curvature using *curvilinear* model or a *non-linear* model. 
+
+A curvilinear model creates a curving line, but is linear in its parameters. The most common way this is accomplished is adding polynomials to our model (e.g., $x, x^2, x^3$). For instance, in the equation below, our model is linear its parameters, but by raising $x$ to different powers and adding those factors together, we can model a curvilinear relationship between $x$ and $y$.
+$$y_i = \beta_0 + \beta_1(x_{1i}) +\beta_2(x^2_{2i})+\epsilon_i$$
+
+In contrast, a non-linear model is *not* linear in its parameters. For instance, relationships that follow a power-function or an exponentional-function (shown below) do not result from linear combination of the parameters (i.e., addition) and instead have more complex relationships. 
+$$y_i = \alpha+\beta*e^{(-\gamma/x_i)}$$
+We *can* model non-linear relationships using mixed-effects regression, but that is more complicated topic that we will need to save for a later time. For now, let's focus on what a curvilinear model might look like in our data:
+
+``` {r curvilinear time by group, echo=FALSE, fig.align="center"}
+ggplot(data_TIME, aes(x = time, y = speed)) +
+  stat_smooth(aes(col=subID, lty=age_group), method="lm", 
+              formula=y~poly(x,2), se=FALSE, alpha=0.4)+
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  stat_smooth(aes(lty=age_group), method="lm", col="black", lwd=1.5,
+              formula=y~poly(x,2), se=FALSE, alpha=0.4)+
+  facet_wrap(~age_group) +
+  scale_x_continuous(name = "Trial") +
+  scale_y_continuous(name = "Speed (m/s)") +
+  theme(axis.text=element_text(size=16, color="black"), 
+        axis.title=element_text(size=16, face="bold"),
+        plot.title=element_text(size=16, face="bold", hjust=0.5),
+        strip.text = element_text(size=16, face="bold"),
+        legend.position = "none")
+  
+```
+
+Visually, this curvilinear model looks like it is providing a much better explanation our data, because there is a closer correspondence between our model estimate (the lines) and the real data (individual data points). Within each group, these lines would come from a mixed-effects model that looks like this:
+$$y_{ij}=(\beta_0+U_{0j})+(\beta_1+U_{1j})(Time_{ij})+(\beta_2+U_{2j})(Time^2_{ij})+\epsilon_{ij}$$
+The thick black lines correspond to the group-level estimates ($\beta$'s) and the thin lines correspond to the estimates for each individual participant ($(\beta+U)$'s). It looks like our curvilinear model has explained a lot of the within-participant variability, because the difference between our estimates and the data ($\epsilon$'s) are very small. However, there does seem be a fair amount of variability between participants ($U$'s) that remains to be explained. 
+
+I hope this brief introduction gives you some sense of what mixed-effects regression is and what it can do. Mixed-effect regression is a very useful analytical tool when it comes the analysis of longitudinal data or in study designs where participants are exposed to different conditions (i.e., repeated measures designs). Although mixed-effects regression is very useful in these study designs, the more commonly used method of analysis is repeated measures analysis of variance (RM ANOVA). 
+
+RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but in many contexts, researchers use a RM ANOVA when a mixed-effect regression might be more appropriate or effective. Lohse, Shen, and Kozlowski (2020) provide a more detailed contrast of these two methods, but I have recreated some of the central arguments from that paper below. 
+
+# Constrast Mixed-Effects Regression and RM ANOVA:
 * **Model concept**
     - **RM ANOVA**:
         * Compares means of a continuous outcome stratified by one or more categorical variable(s) to the grand mean. 
@@ -142,4 +178,11 @@ In summary, we have the following terms to explain our *DATA*:
     - **Mixed-Effects Regression**:
         * Time varying covariates can be included, but you need to careful about collinearity and variance at both the between- and within-subject levels.
 
+# Conclusions
+Hopefully, this introduction gives you a sense of what mixed-effect regression is and what it can do. There are a whole host of topics that we haven't covered yet, but mixed-effect regression is an incredibly flexible and powerful method for analyzing your data. That flexibility comes at a cost, however, as analytical flexibility also means greater complexity and there are a lot of choices that an analyst must make that can have significant influence on the results.
 
+That said, in the following modules I want to explain how mixed-effect regression is useful for factorial designs with repeated measures, truly longitudinal designs, and designs that mix repeated measures with time series data. 
+
+
+# References
+Lohse, K. R., Shen, J., & Kozlowski, A. J. (2020). Modeling Longitudinal Outcomes: A Contrast of Two Methods. Journal of Motor Learning and Development, 1(aop), 1-21. doi: https://doi.org/10.1123/jmld.2019-0007
