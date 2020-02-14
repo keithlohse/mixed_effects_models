@@ -21,6 +21,8 @@ DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_mod
 data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
 data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
 head(data_TIME)
+data_TIME$time.c <- data_TIME$time-mean(data_TIME$time)
+data_TIME$time.c.sq <- data_TIME$time.c^2
 ```
 
 ``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
@@ -41,13 +43,12 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
 
 2. For the second dataset, we will use some new fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilition. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 1 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
 
-```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
+```{r, reading in second data, results="hide", message = FALSE, echo=FALSE}
 DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv")
 
 ```
 
-``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
-head(DAT2)
+``` {r plotting rehab data, echo=FALSE, fig.align="center"}
 ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
   geom_line(aes(group=subID), col="black", alpha=0.8)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -63,10 +64,50 @@ ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
 ```
 
 
-We will explore both of these scenarios in more detail below
+We will explore both of these scenarios in more detail below. One of the key differences between these models and the factorial models we considered before is that now we will need to deal with **model comparisons**. In the factorial designs, we knew which factors we wanted to include in our model and we always tested the fully factorial design (i.e., all main-effects and interactions). In contrast, for these longitudinal models, we will need to compare different ways to represent time (e.g., linear versus curvilinear models). After we compare models to decide on the best to model time, we can start adding in other variables to explain the differences in individual trajectories. 
+
+In order to do this, we will need to use **Full Maximum-Likelihood** to estimate the different model parameters rather than **Restricted Maximum-Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistcally better than another model. I will cover these topics briefly below, but they will also be covered in details in the modules Methods of Estimation and Model Comparison (coming soon).
+
 
 # Modeling Changes in Speed across 4 Trials
-asfasfas
+Starting with our 
+
+### Fixed-Slope Random-Intercepts Model
+```{r}
+# Fixed slope random intercepts model ---- 
+raneff_00<-lmer(speed~ # Fixed-effects 
+                  1+time+ 
+                  # Random-effects 
+                  (1|subID), data=data_TIME, REML=FALSE)
+
+summary(raneff_00)
+```
+
+
+### Random-Slopes Random-Intercepts Model
+```{r}
+# Fixed slope random intercepts model ---- 
+raneff_01<-lmer(speed~ # Fixed-effects 
+                  1+time.c+ 
+                  # Random-effects 
+                  (1+time.c|subID), data=data_TIME, REML=FALSE)
+
+summary(raneff_01)
+```
+
+
+### Quadratic Random-Slopes Random-Intercepts Model
+```{r}
+# Fixed slope random intercepts model ---- 
+raneff_02<-lmer(speed~ # Fixed-effects 
+                  1+time.c+time.c.sq+ 
+                  # Random-effects 
+                  (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE)
+
+summary(raneff_02)
+```
+
+
 
 
 # Modeling Changes in Functional Independence over Months
