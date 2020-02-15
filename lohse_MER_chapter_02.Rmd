@@ -114,7 +114,7 @@ ezANOVA(data = data_COND,
 ```
 Although these two different functions present the results in slightly different
 ways, note that the f-values for the two different omnibus tests match. By either 
-method, the f-observed for the main-effect of condition is F(2,78) = 208.8, p < 0.001. 
+method, the f-observed for the main-effect of condition is F(2,78) = 24.46, p < 0.001. 
 
 If you are familiar with issues of contrast versus treatment coding, Type I
 versus Type III Sums of Squared Errors, and colinearity, then directly controlling
@@ -155,7 +155,7 @@ mod1 <- lmer(speed ~
 anova(mod1)
 ```
 
-Most critically, note that the F-value, F(2,78) = 208.8, p < 0.001 is identical in 
+Most critically, note that the F-value, F(2,78) = 24.46, p < 0.001 is identical in 
 both the RM ANOVA and in the mixed-effects regression model.
 
 If we want to delve deeper into our model, we can also use the summary() function
@@ -218,8 +218,8 @@ ezANOVA(data = DATA,
 )
 ```
 Again, regardless of the coding approach that you use, these two different functions 
-produce the same f-observed for the main-effects of time, F(3,117) = 469.1, p < 0.001,
-and Condition, F(2, 78) = 208.8, p < 0.001. 
+produce the same f-observed for the main-effects of time, F(3,117) = 105.95, p < 0.001,
+and Condition, F(2, 78) = 24.46, p < 0.001, and the Time x Condition interaction, F(6,234) = 13.53, p < 0.001. 
 
  
 
@@ -424,9 +424,6 @@ ezANOVA(data = DATA,
 )
 ```
 
-As illustrated in the figure, these results show main-effects of...
-
- 
 
 
 ## 4.2. Multi-Way Mixed Factorial ANOVA as a mixed-effect model...

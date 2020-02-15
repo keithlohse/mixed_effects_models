@@ -1,7 +1,7 @@
 ---
 title: "Mixed Effects Regresion Models for Different Study Designs"
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-08"
+date: "2020-02-14"
 output:
   html_document:
     df_print: paged
@@ -17,7 +17,7 @@ Resources for creating mixed-effcts models as analogues for ANOVA and for truly 
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html
  
   3. Chapter 03 - Mixed-Effect Models for Time Series Data
-      * ()
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_03.html
  
   4. Chapter 04 - Mixed-Effect Models for Time Series within Factorial Designs
       * ()

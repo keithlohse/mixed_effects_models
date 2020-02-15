@@ -21,14 +21,15 @@ DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_mod
 data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
 data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
 head(data_TIME)
+data_TIME$time.sq <- data_TIME$time^2
 data_TIME$time.c <- data_TIME$time-mean(data_TIME$time)
 data_TIME$time.c.sq <- data_TIME$time.c^2
 ```
 
 ``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
 ggplot(data_TIME, aes(x = time, y = speed)) +
+  geom_line(aes(group=subID), col="black", alpha=0.8)+
   geom_point(aes(fill=subID), pch=21, size=2)+
-  geom_line(aes(col=subID), alpha=0.4)+
   facet_wrap(~age_group) +
   scale_x_continuous(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)") +
@@ -70,7 +71,7 @@ In order to do this, we will need to use **Full Maximum-Likelihood** to estimate
 
 
 # Modeling Changes in Speed across 4 Trials
-Starting with our 
+Starting with modeling changes in speed across four trials of practice, we can test a series of **unconditional** random-effects models to decide how we want to model the effect of time. These models are said to be "unconditional" because the effect of time does not depend on any other variables. In this series of models, the goal is establish the best fitting "shape" of our time variable (e.g., should time be linear or quadratic) and which random-effects are essential to include in the model. 
 
 ### Fixed-Slope Random-Intercepts Model
 ```{r}
@@ -108,7 +109,60 @@ summary(raneff_02)
 ```
 
 
+## Comparing between the Different Models
+Now that we have created several different models, how do we decide which models are the best? How do we decide which parameters to include and which parameters are "statistically significant"? When it comes to mixed-effect linear models (or other forms of "multi-level" models), we use a similar criterion to traditional regression. That is, we still rely on the general idea that.
+
+$$ Data_i = Model_i + Error_i $$
+
+. and if the error is reduced by a large enough magnitude, then we will call that effect statistically significant (i.e., the parameter reduced error by an unusually larger amount under the null-hypothesis.). However, there are some differences between mixed-effect models and traditional Ordinary Least Squares regression.
+
+
+For instance, you might have noticed that p-values are conspicuously absent from the LME4 output. The reasons for this are complicated, but it has to do with the fact that these models can have statistical dependencies and unbalanced/missing data that do not make the calculation of traditional p-values tenable. In short, your denominator degrees of freedom can get a little crazy. (You can also read an explanation from Doug Bates, author of the lme4 package, here: https://stat.ethz.ch/pipermail/r-help/2006-May/094765.html). However, the main things that you should know are:
+
+1. If you really, really want p-values for individual parameters, you can get them from packages that implement the Welch-Satterthwaite approximation to estimate the appropriate degrees of freedom, like the "lmerTest"" package.
+
+2. We are most interested in comparisons between models and less so the individual parameters within a model. All of our models were fit using Full Maximum Likelihood Estimation and we judge models based on a reduction in ERROR that we call Deviance. Fortunately, there are several quantitative and objective methods for evaluating the change in deviance. We will focus on two of these methods, the Wald Test for the change in Deviance and the Akaike Information Criterion (AIC).
+
+You can read more about Full Maximum Likelihood Estimation from other resources, but conceptually the idea of ML estimation is that our computer tests a long series of parameters until it arrives at the specific set of parameters that leads to the smallest error in our data. This is why it is referred to as "maximum likelihood", because we arrive at the set of values (for the given parameters) that are *most likely* to have produced the data we observed. The goodness of fit for these parameter estimates is quantified in something called the *Deviance*, which is a transformation of the *Likelihood*.
+
+$$ Deviance = -2*log(Likelihood) $$
+
+Where likelihood is defined by the amount of error ($\epsilon$) left behind by our estimates. Thus, if we delve a little deeper, the deviance is:
+
+$$ Deviance = N*log(2\pi\sigma^2_\epsilon)+(1/\sigma^2_\epsilon)*(\sum(\epsilon_i)) $$
+
+This formula is kind of scary, but there are two things you need to notice about it:
+
+1. Looking at the right side of the equation, notice that the deviance is still largely determined by the sum of errors. **Thus, everything else being equal, smaller errors are going to lead to a smaller deviance.**
+
+2. Notice that size our sample shows up in two different places (the N at the beginning and the fact that we are summing over N on the right hand size). This means that the deviance is sensitive to the amount of data we are using. **Thus, if we want to compare models based on their deviance, those models need to be based on the same amount of data.**
+
+## The Wald Test of the Change in Deviance
+Now we are ready to make a comparison between some of our different statistical models by comparing the change in the Deviance. Let's start by comparing the Random Intercepts, Fixed Slopes, and Random Slopes models using the anova() function in R.
+
+```{r}
+anova(raneff_00,raneff_01,raneff_02)
+```
+The anova() function gives a number of valuable pieces of information. First, it explicitly lists the models that are being tested. Below, it gives us the model name and the degrees of freedom for each model. It then gives us the Akaike's Information Criterion (AIC), the related Bayesian Information Criterion (or BIC), the log of the Likelihood (or logLik), and the Deviance.
+
+The Random Intercepts model acts as our "benchmark" against which other models can be compared. For instance, the reduction in deviance from the Random Intercepts (Deviance = -163.50) to the Fixed Slopes model (Deviance = -170.48) is 6.98. The change in deviance follows a $\chi^2$ distribution, which allows us to test the statistical significance of the difference between these two models using a classic null hypothesis significance test.
+
+The Random Slopes model (df = 6) has two more parameters than the Random Intercepts model (df = 4) so the degrees of freedom for the $\chi^2=2$ and the p-value for $\chi^2(2)=6.98, p < 0.001$. Thus, we would conclude that the Random Slopes model is significantly better than the Random Intercepts model. Similarly, the Quadratic Random Slopes model reduces the deviance by 33.11 compared to the Linear Random Slopes model and the p-value for $\chi^2(2)=33.11, p <0.001$. Thus, we would conclude that the quadratic model is also a statistically better model than the linear model (assuming $\alpha = 0.05$).
+
+
+## The Akaike Information Criterion (AIC)
+The AIC is another method to evaluating model fit that is based on the Deviance. Although we won't get into the details of the math behind it, the importance of the AIC is in the name "Information Criterion". That is, the AIC is all about informativeness which is slightly different from just being the model that produces the smallest deviance. For a model to be informative, the parameters need to generalize to other new datasets, not just provide the best explanation of the current data. Therefore, the AIC introduces a penalty to reduce **over-fitting** of the model:
+$$ AIC = Deviance + 2(k) $$
+
+In the formula above, k = number of parameters in the model. Thus, for a parameter to improve the AIC it has to reduce the deviance by >2 times the number of parameters. As mentioned, we won't get into why the magic number of 2(k) seems to work so well, but the key thing to know is that the AIC imposes a penalty based on the number of parameters and is thus a more conservative test than the Wald Test of the change in Deviance.
+
+We can see this in action by comparing our three random-effects model in the ANOVA output above. Smaller AIC is an indicator of better fit, and you can see that the quadratic model has the smallest AIC (-183.59). Importantly though, compare the AIC to the deviance for each model. The AIC for each individual model is larger than the deviance for that model. This difference is due to the penalty the AIC introduces to prevent overfitting.
+
+As a word of caution, there are no fixed cut-offs for a "statistically significant" change in the AIC although some research has been done exploring how the relates to other measures of effect-size (see Long, 2012). In general, it is a good idea to declare a *minimum change* in the AIC in advance. Keep in mind that *any* reduction in the AIC means that model is explaining more of the deviance than the complexity it has gained in additional parameters. However, we might want to set a minimum difference of 1 whole point or 2 whole points for selecting a "superior" model. For instance, Anderson (2008, chap. 4) describes a $\Delta AIC = 4$ as a "strong" difference in the explanatory power of two models and $\Delta AIC = 8$ as a "very strong" difference. These rules-of-thumb should not be treated as hard-cutoffs however, and analysts should treated continuously. After all, the **exact** AIC would depend on your data conforming to all of your models assumptions. For that reason, setting a minimum cut-off or 1 or 2 AIC points is useful, because your AIC may not be precise to the level of 0.01 or 0.1. 
+
+For instance, when the sample size is small, there is a good chance that the AIC will be penalizing additional parameters enough to avoid overfitting. To address this issue, researchers have developed the AIC-corrected, or AICc. Assuming that your model is univariate in it's outcome, linear in its parameters, and has (approximately) normally distributed residuals, then the AICc can be calculated by:
+$$ AICc = AIC + (2k^2+2k)/(n-k-1) $$
+Where $n$ is the sample size and $k$ is the number of parameters. As such, the AICc is essentially the AIC with an extra penalty on the number of parameters. As the sample size gets larger, the AICc will effectively converge on the AIC. 
 
 
 # Modeling Changes in Functional Independence over Months
-asfasfasf
