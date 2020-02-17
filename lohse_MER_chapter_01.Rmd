@@ -1,8 +1,10 @@
 ---
-title: "Chapter 1: An Introduction to Mixed-Effect Models"
+title: 'Chapter 1: An Introduction to Mixed-Effect Models'
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-14"
+date: '2020-02-14'
 output:
+  word_document: default
+  pdf_document: default
   html_document:
     df_print: paged
 ---

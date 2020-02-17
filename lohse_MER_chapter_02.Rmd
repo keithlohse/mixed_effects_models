@@ -1,11 +1,12 @@
 ---
 title: 'Chapter 2: Mixed-Effects Models for Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-12"
+date: '2020-02-12'
 output:
+  word_document: default
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 ---
 
 For these examples, we are going to work with a fictional data that that has two 
