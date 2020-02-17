@@ -8,7 +8,7 @@ output:
 ---
 
 # Mixed Effects Regresion Models for Different Study Designs
-Resources for creating mixed-effcts models as analogues for ANOVA and for truly longitudinal models.
+Resources for creating mixed-effects models as analogues for ANOVA and for truly longitudinal models.
  
   1. Chapter 01 - Introduction to Mixed-Effects Models
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_01.html
