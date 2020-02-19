@@ -83,7 +83,8 @@ raneff_00<-lmer(speed~
                   # Fixed-effects 
                   1+time.c+ 
                   # Random-effects 
-                  (1|subID), data=data_TIME, REML=FALSE)
+                  (1|subID), data=data_TIME, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 
 summary(raneff_00)
 ```
@@ -96,7 +97,8 @@ raneff_01<-lmer(speed~
                   # Fixed-effects 
                   1+time.c+ 
                   # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE)
+                  (1+time.c|subID), data=data_TIME, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 
 summary(raneff_01)
 ```
@@ -109,7 +111,8 @@ raneff_02<-lmer(speed~
                   # Fixed-effects 
                   1+time.c+time.c.sq+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE)
+                  (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 
 summary(raneff_02)
 ```
@@ -120,7 +123,8 @@ raneff_02<-lmer(speed~
                   # Fixed-effects 
                   1+time.c+time.c.sq+ 
                   # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE)
+                  (1+time.c|subID), data=data_TIME, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 
 summary(raneff_02)
 ```
@@ -192,7 +196,8 @@ oa_mod_01<-lmer(speed~
                   # Fixed-effects 
                   1+time.c*old.c+time.c.sq*old.c+
                   # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE)
+                  (1+time.c|subID), data=data_TIME, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 
 ```
 
@@ -210,7 +215,7 @@ summary(oa_mod_01)
 ```
 
 # 2.1. Modeling Changes in Functional Independence over Months
-Let's take a look at our second data set to remind ourselves how Rasch Scaled FIM scores changed over time for the our different groups of people with spinal cord injury. 
+Let's take a look at our second data set to remind ourselves how Rasch-Scaled FIM scores changed over time for the our different groups of people with spinal cord injury. 
 ```{r}
 ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
   geom_line(aes(group=subID), col="black", alpha=0.8)+
@@ -226,13 +231,10 @@ ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
 ```
 
 ## 2.2. Fitting Unconditional Time Models
-Time...
+As before, we will start with fitting unconditional models of Time. In this example, Time is in monthsm but to avoid scaling issues when we add our higher order polynomials (e.g., $x^2, x^3$) let's first convert time into years. To show the flexibility in how we code these variables, I will also center time on the first time point so that 0 = the very first point of measurement. Dividing that recentered variable by 12 will give us $year.0$ which codes time, in years, from that very first measurement. We can then create quadratic and cubic versions of the $year.0$ variable. 
 
 ```{r}
-## -------------- Comparing different Fixed-Effects of Time --------------------
-# In order to quantify what our visualizations show us qualitatively, 
-# we need to statistically compare models with linear, quadratic, and cubic
-# effects of time. 
+
 DAT2$year.0 <- (DAT2$time-1)/12
 DAT2$year.0_sq<-DAT2$year.0^2
 DAT2$year.0_cu<-DAT2$year.0^3
@@ -243,7 +245,8 @@ time_linear<-lmer(rasch_FIM~
                 # Fixed-effects
                 1+year.0+
                 # Random-effects
-                (1+year.0|subID), data=DAT2, REML=FALSE)
+                (1+year.0|subID), data=DAT2, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 summary(time_linear)
 
 
@@ -252,7 +255,8 @@ time_square<-lmer(rasch_FIM~
                     # Fixed-effects
                     1+year.0+year.0_sq+
                     # Random-effects
-                    (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE)
+                    (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
+                  control = lmerControl(calc.derivs = FALSE))
 summary(time_square)
 
 
@@ -261,20 +265,11 @@ time_cube<-lmer(rasch_FIM~
                     # Fixed-effects
                     1+year.0+year.0_sq+year.0_cu+
                     # Random-effects
-                    (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE)
+                    (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
 summary(time_cube)
 
 anova(time_linear, time_square, time_cube)
-
-
-# Cubic Fixed-Effect Only 
-time_cube_fixed<-lmer(rasch_FIM~
-                  # Fixed-effects
-                  1+year.0+year.0_sq+year.0_cu+
-                  # Random-effects
-                  (1+year.0|subID), data=DAT2, REML=FALSE)
-
-anova(time_cube_fixed, time_cube)
 ```
 
 
@@ -286,8 +281,9 @@ cond_01<-lmer(rasch_FIM~
                   # Fixed-effects
                   1+year.0*AIS_grade+year.0_sq+year.0_cu+
                   # Random-effects
-                  (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE)
-summary(cond_01)
+                  (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                  control = lmerControl(calc.derivs = FALSE))
+anova(cond_01)
 
 
 # Effect of AIS Grade on Quadratic Time
@@ -295,18 +291,18 @@ cond_02<-lmer(rasch_FIM~
                 # Fixed-effects
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu+
                 # Random-effects
-                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE)
-summary(cond_02)
+                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
+anova(cond_02)
 
-
-
-# Effect of AIS Grade on Cubic Time
+# Effect of AIS Grade on Quadratic Time
 cond_03<-lmer(rasch_FIM~
                 # Fixed-effects
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
                 # Random-effects
-                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE)
-summary(cond_03)
+                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                control = lmerControl(calc.derivs = FALSE))
+anova(cond_03)
 
 # Comparing between Models
 anova(cond_01, cond_02, cond_03)
