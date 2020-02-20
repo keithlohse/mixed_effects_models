@@ -1,0 +1,136 @@
+---
+title: 'Chapter 4: Mixed-Effect Models for Time Series within Factorial Designs'
+author: "Keith Lohse, PhD, PStat"
+date: "2020-02-20"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Working with same dataset we used before, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable. We will do this using two different datasets. 
+
+1. For the first dataset, we will use the same hypothetical experiment we used before: a hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiey provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at exactly the same time for each person, so there is no between-subject variability in the time variable. 
+
+
+```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
+
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
+
+data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
+data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
+data_TIME$time.sq <- data_TIME$time^2
+data_TIME$time.c <- data_TIME$time-mean(data_TIME$time, na.rm=TRUE)
+data_TIME$time.c.sq <- data_TIME$time.c^2
+data_TIME$old.c<-(as.numeric(data_TIME$age_group)-1.5)*(-1)
+```
+
+``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
+ggplot(data_TIME, aes(x = time, y = speed)) +
+  geom_line(aes(group=subID), col="black", alpha=0.8)+
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  facet_wrap(~age_group) +
+  scale_x_continuous(name = "Trial") +
+  scale_y_continuous(name = "Speed (m/s)") +
+  theme(axis.text=element_text(size=16, color="black"), 
+        axis.title=element_text(size=16, face="bold"),
+        plot.title=element_text(size=16, face="bold", hjust=0.5),
+        strip.text = element_text(size=16, face="bold"),
+        legend.position = "none")
+  
+```
+
+
+2. For the second dataset, we will use some new fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilition. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 1 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
+
+```{r, reading in second data, results="hide", message = FALSE, echo=FALSE}
+DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv")
+
+```
+
+``` {r plotting rehab data, echo=FALSE, fig.align="center"}
+ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
+  geom_line(aes(group=subID), col="black", alpha=0.8)+
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  facet_wrap(~AIS_grade) +
+  scale_x_continuous(name = "Time (Months)") +
+  scale_y_continuous(name = "Rasch-Scaled FIM") +
+  theme(axis.text=element_text(size=16, color="black"), 
+        axis.title=element_text(size=16, face="bold"),
+        plot.title=element_text(size=16, face="bold", hjust=0.5),
+        strip.text = element_text(size=16, face="bold"),
+        legend.position = "none")
+  
+```
+
+
+We will explore both of these scenarios in more detail below. One of the key differences between these models and the factorial models we considered before is that now we will need to deal with **model comparisons**. In the factorial designs, we knew which factors we wanted to include in our model and we always tested the fully factorial design (i.e., all main-effects and interactions). In contrast, for these longitudinal models, we will need to compare different ways to represent time (e.g., linear versus curvilinear models). After we compare models to decide on the best to model time, we can start adding in other variables to explain the differences in individual trajectories. 
+
+In order to do this, we will need to use **Full Maximum-Likelihood** to estimate the different model parameters rather than **Restricted Maximum-Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistcally better than another model. I will cover these topics briefly below, but they will also be covered in details in the modules Methods of Estimation and Model Comparison (coming soon).
+
+
+# 1. Modeling Changes in Speed across 4 Trials
+Starting with modeling changes in speed across four trials of practice, we can test a series of **unconditional** random-effects models to decide how we want to model the effect of time. These models are said to be "unconditional" because the effect of time does not depend on any other variables. In this series of models, the goal is establish the best fitting "shape" of our time variable (e.g., should time be linear or quadratic) and which random-effects are essential to include in the model. 
+
+In these models, we will mean-center time to create a new variable time.c ($time_i - \overline{time}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value on Trial 0 (which does exist) to the predicted value on average over time. (Note that the "average trial" also doesn't exist, but has a more useful interpretation.)  
+
+## 1.1. Unconditional Models of Time
+### 1.1.1. Fixed-Slope Random-Intercepts Model
+```{r}
+# Fixed slope random intercepts model ---- 
+raneff_00<-lmer(speed~ 
+                  # Fixed-effects 
+                  1+time.c+ 
+                  # Random-effects 
+                  (1|subID), data=data_TIME, REML=FALSE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+
+summary(raneff_00)
+```
+
+
+### 1.1.2. Random-Slopes Random-Intercepts Model
+```{r}
+# Random slope random intercepts model ---- 
+raneff_01<-lmer(speed~ 
+                  # Fixed-effects 
+                  1+time.c+ 
+                  # Random-effects 
+                  (1+time.c|subID), data=data_TIME, REML=FALSE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+summary(raneff_01)
+```
+
+
+### 1.1.3. Quadratic Random-Slopes Random-Intercepts Model
+```{r}
+# Quadratic slope random intercepts model ---- 
+raneff_02<-lmer(speed~ 
+                  # Fixed-effects 
+                  1+time.c+time.c.sq+ 
+                  # Random-effects 
+                  (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+summary(raneff_02)
+```
+Notice that in this last model we get a warning message, **"boundary (singular) fit: see ?isSingular"**. This message arises because one of the parameters we are estimating either is very close to the edge or on the edge of it's parameter space. Looking at our model output, the culprit appears to be the correlation between the linear and quadratic random slopes $r = -0.96$. Given the high correlation between these random-effects, that suggests we could simplify our model structure by removing the *higher order* random-effect. As such, let's take the quadratic random-effect out of our model and re-fit it. (Note that here the correlation is just very very strong, $-0.96$, if this correlation was $1.00$ we would definitely want to remove it.) 
+```{r}
+# Fixed Quadratic slope random intercepts model ---- 
+raneff_02<-lmer(speed~ 
+                  # Fixed-effects 
+                  1+time.c+time.c.sq+ 
+                  # Random-effects 
+                  (1+time.c|subID), data=data_TIME, REML=FALSE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+summary(raneff_02)
+```
+

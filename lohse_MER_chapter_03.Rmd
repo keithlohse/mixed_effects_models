@@ -283,6 +283,22 @@ time_cube<-lmer(rasch_FIM~
 summary(time_cube)
 ```
 
+In our final model, "time_cube", we get a convergence warning that our model failed to converge with a negative eigen value. The reasons for non-convergence warnings are complicated, but a major contibuter is that our random-effects structure might be too complicated. Let's refit the same model but without the cubic random-effect. Removing this random-effect actually frees up **4** degrees of freedom in our model: the variance of the random-effect and its covariance with the intercept, linear, and quadratic effects. 
+
+```{r}
+# Fixed Cubic Effect of Time
+time_cube<-lmer(rasch_FIM~
+                    # Fixed-effects
+                    1+year.0+year.0_sq+year.0_cu+
+                    # Random-effects
+                    (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+summary(time_cube)
+```
+Removing this random-effect appears to fix our non-convergence problem, so let's retain the model with only a cubic fixed-effect going forward. 
+
 ## 2.2.1. Comparison of Unconditional FIM Models
 With our linear, quadratic, and cubic models now in place, we can use the anova() to calculate our AIC's and do a formal model comparison. Looking at the ANOVA table below, you can see that the cubic model yields the lowest AIC, and is thus the model we want to build on moving forward.  
 ``` {r}
@@ -292,7 +308,7 @@ anova(time_linear, time_square, time_cube)
 
 
 ## 2.3. Conditional Curvilinear Models
-Taking our unconditional cubic model as the "base" model, we can now add in condition effects. The model building strategy you use will likely depend on the context of your research question. For instance, in the previous chapter on experimental designs, we knew that we always wanted to test the fully factorial model from the beginning. In this case, however, I will adopt the strategy of building our models a piece at a time. Adding interactions with the low-level factors first and progressively adding in higher-order interactions. 
+Taking our unconditional cubic model as the "base" model, we can now *condition* our model's predictions based on the AIS Grade for each person. The model building strategy you use will likely depend on the context of your research question. For instance, in the previous chapter on experimental designs, we knew that we always wanted to test the fully factorial model from the beginning. In this case, however, I will adopt the strategy of building our models one piece at a time. Adding interactions with the low-level factors first and progressively adding in higher-order interactions. 
 
 ```{r}
 # Effect of AIS Grade on Time
@@ -300,7 +316,7 @@ cond_01<-lmer(rasch_FIM~
                   # Fixed-effects
                   1+year.0*AIS_grade+year.0_sq+year.0_cu+
                   # Random-effects
-                  (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                  (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
                   control=lmerControl(optimizer="Nelder_Mead",
                                     optCtrl=list(maxfun=2e5)))
 anova(cond_01)
@@ -311,25 +327,25 @@ cond_02<-lmer(rasch_FIM~
                 # Fixed-effects
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu+
                 # Random-effects
-                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
                 control=lmerControl(optimizer="Nelder_Mead",
                                     optCtrl=list(maxfun=2e5)))
 
 anova(cond_02)
 
-# Effect of AIS Grade on Quadratic Time
+# Effect of AIS Grade on Cubic Time
 cond_03<-lmer(rasch_FIM~
                 # Fixed-effects
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
                 # Random-effects
-                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
                 control=lmerControl(optimizer="Nelder_Mead",
                                     optCtrl=list(maxfun=2e5)))
 
 anova(cond_03)
 ```
 
-With our three conditional models in place, we can now use the anova() function to formally compare between models. The AIC is now **increasing** as our models get more complex, indicating that the model with linear interactions between Time and AIS_grade is the most parsimonious explanation of our data. 
+With our three conditional models in place, we can now use the anova() function to formally compare between models. The AIC is now **increasing** as our models get more complex, indicating that the model with linear interactions between Time and AIS Grade is the most parsimonious explanation of our data. 
 ```{r}
 # Comparing between Models
 anova(time_cube, cond_01, cond_02, cond_03)
@@ -339,7 +355,10 @@ Having selected the best model, I often get questions about which model you shou
 
 For instance, if I am testing a hypothesis that strongly predicted a higher-order interaction between AIS_grade and Time, then presenting "cond_03" might make the most sense. That is, even though we know those higher order parameters didn't not explain a lot of variation in our outcomes, it is still interesting to see what the estimates of those effects are. In contrast, if those higher order interactions were very exploratory, it would be reasonable to stop at "cond_01" and only present that model. 
 
-Personally, I like to err on the side of completeness, so I would probably present "cond_03" in the text but report the AIC's for each model, making it clear that "cond_01" was the best fittign model. 
+Personally, I like to err on the side of completeness, so I would probably present "cond_03" in the text but report the AIC's for each model, making it clear that "cond_01" was the best fitting model.
+```{r}
+summary(cond_03)
+```
 
 # A Note on Optimizers
 One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the Nelder-Mead optimizer, rather than the "Bound Approximation BY Quadratic Approximation" (or *BOBYQA*) optimizer that lme4 uses by defaut. 
