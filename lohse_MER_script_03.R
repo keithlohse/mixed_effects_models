@@ -45,7 +45,8 @@ raneff_00<-lmer(speed~
                   1+time.c+ 
                   # Random-effects 
                   (1|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_00)
 
@@ -58,7 +59,8 @@ raneff_01<-lmer(speed~
                   1+time.c+ 
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_01)
 
@@ -71,7 +73,8 @@ raneff_02<-lmer(speed~
                   1+time.c+time.c.sq+ 
                   # Random-effects 
                   (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_02)
 
@@ -81,7 +84,8 @@ raneff_02<-lmer(speed~
                   1+time.c+time.c.sq+ 
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_02)
 
@@ -93,7 +97,8 @@ oa_mod_01<-lmer(speed~
                   1+time.c*old.c+time.c.sq*old.c+
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 anova(raneff_00, raneff_01, raneff_02, oa_mod_01)
 
@@ -123,7 +128,10 @@ time_linear<-lmer(rasch_FIM~
                     1+year.0+
                     # Random-effects
                     (1+year.0|subID), data=DAT2, REML=FALSE,
-                  control = lmerControl(calc.derivs = FALSE))
+                  control=lmerControl(optimizer="Nelder_Mead",
+                                      optCtrl=list(maxfun=2e5)))
+
+
 summary(time_linear)
 
 
@@ -133,7 +141,9 @@ time_square<-lmer(rasch_FIM~
                     1+year.0+year.0_sq+
                     # Random-effects
                     (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                  control = lmerControl(calc.derivs = FALSE))
+                  control=lmerControl(optimizer="Nelder_Mead",
+                                      optCtrl=list(maxfun=2e5)))
+
 summary(time_square)
 
 
@@ -143,7 +153,9 @@ time_cube<-lmer(rasch_FIM~
                   1+year.0+year.0_sq+year.0_cu+
                   # Random-effects
                   (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
 summary(time_cube)
 
 anova(time_linear, time_square, time_cube)
@@ -154,7 +166,9 @@ cond_01<-lmer(rasch_FIM~
                 1+year.0*AIS_grade+year.0_sq+year.0_cu+
                 # Random-effects
                 (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-              control = lmerControl(calc.derivs = FALSE))
+              control=lmerControl(optimizer="Nelder_Mead",
+                                  optCtrl=list(maxfun=2e5)))
+
 anova(cond_01)
 
 
@@ -164,7 +178,9 @@ cond_02<-lmer(rasch_FIM~
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu+
                 # Random-effects
                 (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-              control = lmerControl(calc.derivs = FALSE))
+              control=lmerControl(optimizer="Nelder_Mead",
+                                  optCtrl=list(maxfun=2e5)))
+
 anova(cond_02)
 
 # Effect of AIS Grade on Quadratic Time
@@ -173,7 +189,9 @@ cond_03<-lmer(rasch_FIM~
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
                 # Random-effects
                 (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-              control = lmerControl(calc.derivs = FALSE))
+              control=lmerControl(optimizer="Nelder_Mead",
+                                  optCtrl=list(maxfun=2e5)))
+
 anova(cond_03)
 
 # Comparing between Models

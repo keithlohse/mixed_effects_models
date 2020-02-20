@@ -1,13 +1,13 @@
 ---
-title: "Mixed Effects Regresion Models for Different Study Designs"
+title: "Applied Mixed-Effects Regresion for the Clinical Sciences"
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-14"
+date: "2020-02-20"
 output:
   html_document:
     df_print: paged
 ---
 
-# Mixed Effects Regresion Models for Different Study Designs
+# Applied Mixed-Effects Regresion for the Clinical Sciences
 Resources for creating mixed-effects models as analogues for ANOVA and for truly longitudinal models.
  
   1. Chapter 01 - Introduction to Mixed-Effects Models

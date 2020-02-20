@@ -1,7 +1,7 @@
 ---
 title: 'Chapter 3: Mixed-Effects Models for Longitudinal Data'
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-14"
+date: "2020-02-20"
 output:
   html_document:
     df_print: paged
@@ -84,7 +84,9 @@ raneff_00<-lmer(speed~
                   1+time.c+ 
                   # Random-effects 
                   (1|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
 
 summary(raneff_00)
 ```
@@ -98,7 +100,8 @@ raneff_01<-lmer(speed~
                   1+time.c+ 
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_01)
 ```
@@ -112,11 +115,12 @@ raneff_02<-lmer(speed~
                   1+time.c+time.c.sq+ 
                   # Random-effects 
                   (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_02)
 ```
-Notice that in this last model we get a warning message, **"boundary (singular) fit: see ?isSingular"**. This message arises because one of the parameters we are estimating either is very close to the edge of it's parameter space. Looking at our model output, the culprit appears to be the correlation between the linear and quadratic random slopes $r = -0.96$. Given the high correlation between these random-effects, that suggests we could simplify our model structure by removing the *higher order* random-effect. As such, let's take the quadratic random-effect out of our model and re-fit it. (Note that here the correlation is just very very strong, $-0.96$, if this correlation was $1.00$ we would definitely want to remove it.) 
+Notice that in this last model we get a warning message, **"boundary (singular) fit: see ?isSingular"**. This message arises because one of the parameters we are estimating either is very close to the edge or on the edge of it's parameter space. Looking at our model output, the culprit appears to be the correlation between the linear and quadratic random slopes $r = -0.96$. Given the high correlation between these random-effects, that suggests we could simplify our model structure by removing the *higher order* random-effect. As such, let's take the quadratic random-effect out of our model and re-fit it. (Note that here the correlation is just very very strong, $-0.96$, if this correlation was $1.00$ we would definitely want to remove it.) 
 ```{r}
 # Fixed Quadratic slope random intercepts model ---- 
 raneff_02<-lmer(speed~ 
@@ -124,7 +128,8 @@ raneff_02<-lmer(speed~
                   1+time.c+time.c.sq+ 
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 summary(raneff_02)
 ```
@@ -149,7 +154,7 @@ $$ Deviance = -2*log(Likelihood) $$
 
 Where likelihood is defined by the amount of error ($\epsilon$) left behind by our estimates. Thus, if we delve a little deeper, the deviance is:
 
-$$ Deviance = N*log(2\pi\sigma^2_\epsilon)+(1/\sigma^2_\epsilon)*(\sum(\epsilon_i)) $$
+$$ Deviance = N*log(2\pi\sigma^2_\epsilon)+(1/\sigma^2_\epsilon)*(\sum(\epsilon^2_i)) $$
 
 This formula is kind of scary, but there are two things you need to notice about it:
 
@@ -178,11 +183,12 @@ In the formula above, k = number of parameters in the model. Thus, for a paramet
 
 We can see this in action by comparing our three random-effects model in the ANOVA output above. Smaller AIC is an indicator of better fit, and you can see that the quadratic model has the smallest AIC (-183.59). Importantly though, compare the AIC to the deviance for each model. The AIC for each individual model is larger than the deviance for that model. This difference is due to the penalty the AIC introduces to prevent overfitting.
 
-As a word of caution, there are no fixed cut-offs for a "statistically significant" change in the AIC although some research has been done exploring how the relates to other measures of effect-size (see Long, 2012). In general, it is a good idea to declare a *minimum change* in the AIC in advance. Keep in mind that *any* reduction in the AIC means that model is explaining more of the deviance than the complexity it has gained in additional parameters. However, we might want to set a minimum difference of 1 whole point or 2 whole points for selecting a "superior" model. For instance, Anderson (2008, chap. 4) describes a $\Delta AIC = 4$ as a "strong" difference in the explanatory power of two models and $\Delta AIC = 8$ as a "very strong" difference. These rules-of-thumb should not be treated as hard-cutoffs however, and analysts should treated continuously. After all, the **exact** AIC would depend on your data conforming to all of your models assumptions. For that reason, setting a minimum cut-off or 1 or 2 AIC points is useful, because your AIC may not be precise to the level of 0.01 or 0.1. 
+As a word of caution, there are no fixed cut-offs for a "statistically significant" change in the AIC although some research has been done exploring how the AIC relates to other measures of effect-size (see Long, 2012). In general, it is a good idea to declare a *minimum change* in the AIC in advance. Keep in mind that *any* reduction in the AIC means that model is explaining more of the deviance than the complexity it has gained in additional parameters. However, we might want to set a minimum difference of 1 whole point or 2 whole points for selecting a "superior" model. For instance, Anderson (2008, chap. 4) describes a $\Delta AIC = 4$ as a "strong" difference in the explanatory power of two models and $\Delta AIC = 8$ as a "very strong" difference. After all, the **exact** AIC would depend on your data conforming to all of your model's assumptions. For that reason, setting a minimum cut-off or 1 or 2 AIC points is useful, because your AIC may not be precise to the level of 0.01 or 0.1. 
 
 For instance, when the sample size is small, there is a good chance that the AIC will be penalizing additional parameters enough to avoid overfitting. To address this issue, researchers have developed the AIC-corrected, or AICc. Assuming that your model is univariate in it's outcome, linear in its parameters, and has (approximately) normally distributed residuals, then the AICc can be calculated by:
 $$ AICc = AIC + (2k^2+2k)/(n-k-1) $$
 Where $n$ is the sample size and $k$ is the number of parameters. As such, the AICc is essentially the AIC with an extra penalty on the number of parameters. As the sample size gets larger, the AICc will effectively converge on the AIC. 
+These rules-of-thumb should not be treated as hard-cutoffs however, and analysts should treat the AIC continuously. I do think that these guidelines are useful, however, because our models will likely violate our assumptions to some degree. Using integer values of the AIC then, builds in a "buffer" to help us make sure that we are select a model that truly explains more variability than it adds in complexity. 
 
 
 ## 1.5. Creating a Conditional Model of Change over Time
@@ -197,7 +203,8 @@ oa_mod_01<-lmer(speed~
                   1+time.c*old.c+time.c.sq*old.c+
                   # Random-effects 
                   (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
 ```
 
@@ -216,7 +223,7 @@ summary(oa_mod_01)
 
 # 2.1. Modeling Changes in Functional Independence over Months
 Let's take a look at our second data set to remind ourselves how Rasch-Scaled FIM scores changed over time for the our different groups of people with spinal cord injury. 
-```{r}
+```{r, fig.align="center"}
 ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
   geom_line(aes(group=subID), col="black", alpha=0.8)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -246,7 +253,9 @@ time_linear<-lmer(rasch_FIM~
                 1+year.0+
                 # Random-effects
                 (1+year.0|subID), data=DAT2, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
 summary(time_linear)
 
 
@@ -256,7 +265,9 @@ time_square<-lmer(rasch_FIM~
                     1+year.0+year.0_sq+
                     # Random-effects
                     (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                  control = lmerControl(calc.derivs = FALSE))
+                  control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
 summary(time_square)
 
 
@@ -266,15 +277,23 @@ time_cube<-lmer(rasch_FIM~
                     1+year.0+year.0_sq+year.0_cu+
                     # Random-effects
                     (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
-summary(time_cube)
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
+summary(time_cube)
+```
+
+## 2.2.1. Comparison of Unconditional FIM Models
+With our linear, quadratic, and cubic models now in place, we can use the anova() to calculate our AIC's and do a formal model comparison. Looking at the ANOVA table below, you can see that the cubic model yields the lowest AIC, and is thus the model we want to build on moving forward.  
+``` {r}
 anova(time_linear, time_square, time_cube)
 ```
 
 
 
 ## 2.3. Conditional Curvilinear Models
+Taking our unconditional cubic model as the "base" model, we can now add in condition effects. The model building strategy you use will likely depend on the context of your research question. For instance, in the previous chapter on experimental designs, we knew that we always wanted to test the fully factorial model from the beginning. In this case, however, I will adopt the strategy of building our models a piece at a time. Adding interactions with the low-level factors first and progressively adding in higher-order interactions. 
+
 ```{r}
 # Effect of AIS Grade on Time
 cond_01<-lmer(rasch_FIM~
@@ -282,7 +301,8 @@ cond_01<-lmer(rasch_FIM~
                   1+year.0*AIS_grade+year.0_sq+year.0_cu+
                   # Random-effects
                   (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                  control = lmerControl(calc.derivs = FALSE))
+                  control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 anova(cond_01)
 
 
@@ -292,7 +312,9 @@ cond_02<-lmer(rasch_FIM~
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu+
                 # Random-effects
                 (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
 anova(cond_02)
 
 # Effect of AIS Grade on Quadratic Time
@@ -301,11 +323,46 @@ cond_03<-lmer(rasch_FIM~
                 1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
                 # Random-effects
                 (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                control = lmerControl(calc.derivs = FALSE))
-anova(cond_03)
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
 
-# Comparing between Models
-anova(cond_01, cond_02, cond_03)
+anova(cond_03)
 ```
 
+With our three conditional models in place, we can now use the anova() function to formally compare between models. The AIC is now **increasing** as our models get more complex, indicating that the model with linear interactions between Time and AIS_grade is the most parsimonious explanation of our data. 
+```{r}
+# Comparing between Models
+anova(time_cube, cond_01, cond_02, cond_03)
+```
 
+Having selected the best model, I often get questions about which model you should report when writing these results for publication. For instance, should I report "cond_01" because it was the best fitting model? Or should I report "cond_03" to show the higher-order interactions even though we know estimating those parameters increased the AIC (and therefore are unlikely to be statistically interesting). I think there are valid points to made for both approaches and it likely depends on **1)** exaclty what question you are testing and **2)** what is going to be best understood by your audience. 
+
+For instance, if I am testing a hypothesis that strongly predicted a higher-order interaction between AIS_grade and Time, then presenting "cond_03" might make the most sense. That is, even though we know those higher order parameters didn't not explain a lot of variation in our outcomes, it is still interesting to see what the estimates of those effects are. In contrast, if those higher order interactions were very exploratory, it would be reasonable to stop at "cond_01" and only present that model. 
+
+Personally, I like to err on the side of completeness, so I would probably present "cond_03" in the text but report the AIC's for each model, making it clear that "cond_01" was the best fittign model. 
+
+# A Note on Optimizers
+One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the Nelder-Mead optimizer, rather than the "Bound Approximation BY Quadratic Approximation" (or *BOBYQA*) optimizer that lme4 uses by defaut. 
+```{r, eval=FALSE}
+control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+```
+
+The reason for this is that non-convergence warnings are much more common in the BOBYQA optimizer relative to other optimizers when our random effects take the form $(1+x_1|Group)$ rather than $(1|Group)$, and when we have fixed-effects on very different scales. As we have models with random slopes and we are using full maximum likelihood estmation, I prefer the Nelder-Mead optimizer for these cases. In my experience I get the same estimates, but with far few non-convergence warnings (only getting those warning when models are truly unstable). 
+
+Now, lme4 will use the BOBYQA optimizer by default, but you can also manually select that optimizer and use it in the models above with the following code:
+
+```{r, eval=FALSE}
+control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=2e5)))
+```
+A good exercise then is to run all of the models in this chapter using the Nelder-Mead optimizer and the BOBYQA optimizer. Do these models differ in how they estimate the fixed-effects and standard errors of the fixed-effects? Do these models differ in how they estimate the variances and covariances of the random-effects? 
+
+For a fairly accessible discussion of these issues, I would recommend a simulation study by McCoach and colleagues (2018; https://journals.sagepub.com/doi/abs/10.3102/1076998618776348?journalCode=jebb). By simulating various multi-level data structures and then fitting the same mixed-effects models in different software packages, McCoach and colleagues found that the BOBYQA optimizer tended to give more non-convergence warnings than other optimizers/programs even though the estimates from the models were (effectively) the same.
+
+As such, although there are good reasons that BOBYQA is the default optimizer in lme4, I find that it is unnecessarily sensitive to non-convergence in models with random-slopes. I would welcome feedback from more knowledgeable statisticians on this point, but in my experience switching to the Nelder-Mead optimizer in these situations does not have any noticeable trade-offs in the accuracy of parameter estimation. For complex models, however, the Nelder-Mead optimizer may take longer to run. Thus, for the more modest sized data sets that I work with (tens of thousands of observations), I don't really notice the trade-off in speed and I'd rather not get finicky warnings. If you have properly "big" data however, the speed trade-off might be more a problem and you might need to seek out different solutions (e.g. upping the iterations of the BOBYQA optimizer or selecting a different optimizer altogether). 
+
+
+
+
+...
