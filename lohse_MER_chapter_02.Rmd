@@ -1,12 +1,12 @@
 ---
 title: 'Chapter 2: Mixed-Effects Models for Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
-date: '2020-02-12'
+date: '2021-06-09'
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
 
 For these examples, we are going to work with a fictional data that that has two 
@@ -14,7 +14,7 @@ fully nested (i.e., between-subjects) and two fully crossed (i.e., within-subjec
 factors. We have two hypothetical groups of older adults (OA, >65 y) and younger 
 adults (YA, <35 y). Within each of those groups, half of the participants were
 in the control group (C) and half were in the treatment group (T). Each participant 
-was also measured at three different times (1 to 3) in three different conditions 
+was also measured on four different trials (1 to 4) in three different conditions 
 (A, B, and C). 
 
 First, we will open the relevant R packages that we will use and then we will 
@@ -23,8 +23,8 @@ will need install the packages before running the library() function.) Once the 
 are downloaded we can use the head() function to view the first ten rows of the data.
 
 
-```{r, setting libraries, results="hide", message = FALSE}
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
+```{r, setting libraries, results="hide", message = FALSE, warning=FALSE}
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest); library(car)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
 
@@ -35,46 +35,49 @@ head(DATA, 10)
 
 ```
 
-Because we will want to ignore each of the within-subject variables at different 
-times, we will want to average across trials to create a data set with one 
-observation per condition (*data_COND*), and we will want to average across conditions
-to create a data set with one observation at each time (*data_TIME*).
+For the examples we will walk through, we will ignore different variables at different 
+times. For instance, we will want to average across trials to create a data set with one 
+observation per condition (which we will call *data_COND*), and we will want to average across conditions
+to create a data set with one observation for each trial (which we will call *data_TIME*).
 
-Averaging across time, here are the first ten rows of *data_COND*. 
-```{r, subsetting data by condition}
-data_COND <- aggregate(speed ~ subID + condition + age_group + group, data=DATA, FUN=mean)
-data_COND <- data_COND %>% arrange(subID, age_group, group, condition)
+Averaging across trials, here are the first ten rows of *data_COND*. 
+```{r, subsetting data by condition, warning=FALSE}
+data_COND <- DATA %>% group_by(subID, condition, age_group, group) %>% # Note we ignore trial to average across it
+  summarize(speed = mean(speed, na.rm=TRUE)) %>% # I have included na.rm=TRUE even though there are no missing data
+  arrange(age_group, subID, condition) # finally, we can resort our data by subIDs within groups
 head(data_COND, 10)
 ```
 
-Averaging across condiitons, here are the first ten rows of data_TIME. 
-``` {r, subsetting data by time}
-data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
-data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
-head(data_TIME)
+Averaging across conditions, here are the first ten rows of *data_TIME*. 
+``` {r, subsetting data by time, warning=FALSE}
+data_TIME <- DATA %>% group_by(subID, time, age_group, group) %>% # Note we ignore condition to average across it
+  summarize(speed = mean(speed, na.rm=TRUE)) %>% # I have included na.rm=TRUE even though there are no missing data
+  arrange(age_group, subID, time) # finally, we can resort our data by subIDs within groups
+head(data_TIME, 10)
+
 ```
 
 With these data in place, we can now test all of our different models. We are going
-to explore the appropriate mixed-effects regression models for these different 
+to explore the appropriate mixed-effects regression (MER) models for these different 
 situations:
 
-  1. **One-Way Repeated Measures ANOVA**
+  1. **MER as One-Way Repeated Measures ANOVA**
       * When we have a single crossed factor (i.e., one within-subjects factor) in 
-      our mixed-ffects model.
-  2. **Two-Way Repeated Measures ANOVA**
-      * When we have mutilple crossed factors (i.e., two within-subjects factors) in 
-    our mixed-ffects model.
-  3. **Mixed-Factorial ANOVA with a Single Within-Subjects Factor**
+      our mixed-effects model.
+  2. **MER as Two-Way Repeated Measures ANOVA**
+      * When we have multiple crossed factors (i.e., two within-subjects factors) in 
+    our mixed-effects model.
+  3. **MER as Mixed-Factorial ANOVA with a Single Within-Subjects Factor**
       * When we have a single crossed factor (i.e., one within-subjects factor) and 
-    multiple nested factors (i.e., between-subjects factors) in our mixed-ffects 
+    a single nested factor (i.e., between-subjects factors) in our mixed-effects 
     model.
-  4. **Mixed-Factorial ANOVA with Multiple Within-Subjects Factors**
+  4. **MER as Mixed-Factorial ANOVA with Multiple Within-Subjects Factors**
       * When we have multiple crossed factors (i.e., two within-subjects factor) and 
-    multiple nested factors (i.e., between-subjects factors) in our mixed-ffects 
+    a single nested factor (i.e., between-subjects factors) in our mixed-effects 
     model.
 
 
-# 1. One-Way Repeated Measures ANOVA 
+# 1. MER as One-Way Repeated Measures ANOVA 
 ## (A Single Crossed Factor)
 For this example, we will focus on only the effect of condition, so we will use 
 the data_COND dataset to average across different trials. First, let's plot the 
@@ -86,7 +89,7 @@ ggplot(data_COND, aes(x = condition, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
              position=position_jitter(w=0.2, h=0))+
   geom_boxplot(aes(fill=condition), col="black", 
-               alpha=0.4, width=0.5)+
+               alpha=0.4, width=0.5, outlier.shape = NA)+
   scale_x_discrete(name = "Condition") +
   scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
@@ -101,12 +104,12 @@ ggplot(data_COND, aes(x = condition, y = speed)) +
 ## 1.1. As an ANOVA...
 To implement a simple one-way repeated measures ANOVA, we have a few options. We 
 could directly code our ANOVA using the aov() function in R:
-``` {r one way ANOVA the hard way, echo=TRUE}
+``` {r one way ANOVA the hard way, echo=TRUE, warning=FALSE}
 summary(aov(speed ~ condition + Error(subID/condition), data=data_COND))
 ```
 
 Or we can use the ezANOVA() function from the "ez" package. 
-```{r one way ANOVA the ez way, echo=TRUE}
+```{r one way ANOVA the ez way, echo=TRUE, warning=FALSE}
 ezANOVA(data = data_COND, 
     dv = .(speed),
     wid = .(subID),
@@ -115,34 +118,33 @@ ezANOVA(data = data_COND,
 ```
 Although these two different functions present the results in slightly different
 ways, note that the f-values for the two different omnibus tests match. By either 
-method, the f-observed for the main-effect of condition is F(2,78) = 24.46, p < 0.001. 
+method, the f-observed for the main-effect of condition is **F(2,78)=24.46, p<0.001**. 
 
 If you are familiar with issues of contrast versus treatment coding, Type I
-versus Type III Sums of Squared Errors, and colinearity, then directly controlling
-your own ANOVA using base R is probably a safe bet. If you are not familiar with
-those terms/issues, then the ezANOVA code is probably the best solution for a quick
-fix, but I would strongly encourage you to develop a more detailed understanding
-of general-linear models before jumping into mixed-effect models. 
+versus Type III Sums of Squared Errors, and collinearity, then directly controlling
+your own ANOVA using base R is probably a safe bet. 
 
-Specifically, by default the aov() function provides a test of your statistical
+If you are not familiar with those terms/issues, then the ezANOVA code is probably the best option for you. However, I would strongly encourage you to develop a more detailed understanding of general-linear models before jumping into mixed-effect models. 
+
+By default the aov() function provides a test of your statistical
 model using Type I Sums of Squared Errors, whereas the ezANOVA() function provides
 a test of your statistical model using Type III Sums of Squared Errors. In a completely
 orthogonal design where all factors are statistically independent of each other 
-(i.e., there is no colinearity), the Type I and Type III Sums of Squared Errors 
+(i.e., there is no collinearity), the Type I and Type III Sums of Squared Errors 
 will agree. By default, R also uses treatment coding (or "dummy" coding) for categorical
-factors rather than orthogonal constrast codes. The omnibus F-tests that we see in 
+factors rather than orthogonal contrast codes. The omnibus F-tests that we see in 
 the ANOVA output will be the same regardless of the types of codes used, but if 
 we dig into individual regression coefficients, it is important to remember how
 these variables were coded so that we can interpret them correctly.
 
 
-## 1.2. One-way RM ANOVA as a mixed-effect model...
+## 1.2. Getting the same result with a mixed-effect model...
 Because we have a single within-subject factor, we will  need to add a 
 random-effect of subject to account for individual differences between subjects.
 By partitioning the between-subjects variance out of our model, we can fairly test
-the effect of condition, because our residuals will now be independent of each
+the effect of *condition*, because our residuals will now be independent of each
 other. 
-```{r one way another in a mixed effects model, echo=TRUE}
+```{r one way ANOVA in a mixed effects model, echo=TRUE, warning=FALSE}
 # First we will define our model
 mod1 <- lmer(speed ~ 
                # Fixed Effects:
@@ -156,7 +158,7 @@ mod1 <- lmer(speed ~
 anova(mod1)
 ```
 
-Most critically, note that the F-value, F(2,78) = 24.46, p < 0.001 is identical in 
+Most critically, note that the F-value, **F(2,78)=24.46, p<0.001** is identical in 
 both the RM ANOVA and in the mixed-effects regression model.
 
 If we want to delve deeper into our model, we can also use the summary() function
@@ -173,7 +175,7 @@ summary(mod1)
 
 
 
-# 2. Two-Way Repeated Measures ANOVA 
+# 2. MER as Two-Way Repeated Measures ANOVA 
 ## (Multiple Crossed Factors)
 For this example, we will be analyzing both Time and Condition, so we will use 
 our full data frame, *DATA*. First, let's plot the data to get a better 
@@ -184,10 +186,10 @@ DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
-             position=position_jitterdodge(dodge.width = 0.5))+
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
   geom_boxplot(aes(fill=condition), col="black", 
-               alpha=0.4, width=0.5)+
-  scale_x_discrete(name = "Time") +
+               alpha=0.4, width=0.5, outlier.shape = NA)+
+  scale_x_discrete(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
@@ -199,7 +201,7 @@ ggplot(DATA, aes(x = time, y = speed)) +
 
 
 ## 2.1. As an ANOVA...
-Before we run our models, we want to convert time to a **factor** so that our model
+Before we run our models, we want to convert trial to a **factor** so that our model
 is treating time categorically rather than continuously. (In later modules, we 
 will discuss how to mix continuous and categorical factors.) Additionally, remember
 that we are now using our larger data set *DATA* rather than our aggregated data
@@ -219,8 +221,8 @@ ezANOVA(data = DATA,
 )
 ```
 Again, regardless of the coding approach that you use, these two different functions 
-produce the same f-observed for the main-effects of time, F(3,117) = 105.95, p < 0.001,
-and Condition, F(2, 78) = 24.46, p < 0.001, and the Time x Condition interaction, F(6,234) = 13.53, p < 0.001. 
+produce the same f-observed for the main-effects of time, **F(3,117)=105.95, p<0.001**,
+and Condition, **F(2,78)=24.46, p<0.001**, and the Time x Condition interaction, **F(6,234)=13.53, p<0.001**. 
 
  
 
@@ -228,24 +230,25 @@ and Condition, F(2, 78) = 24.46, p < 0.001, and the Time x Condition interaction
 ## 2.2. Two-way RM ANOVA as a mixed-effect model...
 Because we now have two crossed factors, we need to account not only for the fact 
 that we have multiple observations for each participant, but we have multiple 
-observations coming from other factors. For instance, for the effect of Condition, 
-we actually have Condition effects at Time A, Time B, and Time C. 
-The converse is also true for the effect of Time, we have effects of Time in
+observations for each person at each level of each factor. 
+
+For instance, for the effect of Condition, we actually have Condition effects at Trial 1, Trial 2, Trial 3, and Trial 4. 
+The converse is also true for the effect of Time, we have four different trials in
 Condition A, Condition B, and Condition C. Thus, in order to appropriately 
 account for the statistical dependencies in our data, we need to add random-effects
 of "time:subID" and "condition:subID" to the model. 
 
 The colon operator (":") means that we are crossing or multiplying these factors. 
-That is, if we have subject ID's A, B, and C and Trials 1, 2, and 3, then we end up with 
-A1, A2, A3, B1, B2, B3, etc. 
+That is, if we have subject ID's A, B, and C and Trials 1, 2, 3, and 4, then we end up with 
+A1, A2, A3, A4, B1, B2, B3, B4, etc. 
 
 For more information on how random-effects are specified and what they mean in R,
-I recommend looking at the discussion on this webpage: https://stats.stackexchange.com/questions/228800/crossed-vs-nested-random-effects-how-do-they-differ-and-how-are-they-specified 
+I recommend looking at this discussion on Stack Exchange: https://stats.stackexchange.com/questions/228800/crossed-vs-nested-random-effects-how-do-they-differ-and-how-are-they-specified 
 
 
-```{r two way another in a mixed effects model, echo=TRUE}
+```{r two way another in a mixed effects model, echo=TRUE, warning=FALSE}
 # First we will define our model
-mod1 <- lmer(speed ~ 
+mod2 <- lmer(speed ~ 
                # Fixed Effects:
                time*condition + 
                # Random Effects
@@ -254,14 +257,14 @@ mod1 <- lmer(speed ~
              data=DATA, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod2)
 ```
 
 Again, for our purposes, the critical thing to note is that the F-values for the 
 main-effects and interactions are the same between our RM ANOVAs and the mixed-effects
 model. Without delving into the mathematical details, this is a good demonstration 
-that with the appropriate random-effects our regression model is analogous to the
-ANOVA. This allows us to capitalize on the benefits of mixed-effects regression for
+that the appropriate random-effects our regression model make it analogous to the
+factorial ANOVA. This allows us to capitalize on the benefits of mixed-effects regression for
 designs that we would normally analyze using factorial ANOVA. 
 
 
@@ -270,44 +273,48 @@ to get more information about model fit statistics, parameter estimates, random-
 and residuals. 
 
 ```{r}
-summary(mod1)
+summary(mod2)
 ```
 
 
 
 
 
-# 3. Mixed-Factorial ANOVA with One Crossed Factor 
-## (Split-Plot Design)
-For this example, we will now consider both of our between-subject factors of age
-and treatment, as well as the within-subject factor of condition. Do to this, we will 
-average over the different times (1, 2, and 3) to get one observation in each 
+# 3. MER as Mixed-Factorial ANOVA with One Crossed Factor 
+## (2 (Age) x 3 (Condition) ANOVA Example)
+For this example, we will now consider both the between-subject factor of age, 
+as well as the within-subject factor of condition. Do to this, we will 
+average over the different trials (1, 2, 3, and 4) to get one observation in each 
 condition. This design is sometimes referred as a "mixed-factorial" design, because
 we have a mix of between-subjects and within-subject factors. Depending 
 on your background, you might be more familiar with this as a "split plot" design. 
-Split plot refers to the fact that some plots are assigned to different levels of Factor A (e.g., Treatment
+Split plot comes from agronomy (where a lot of statistics where developed!) and 
+refers to the fact that some plots are assigned to different levels of Factor A (e.g., Treatment
 versus Control), but within each plot there is a second level of randomization to 
 different levels of Factor B (e.g., Conditions A, B, or C). Both terms describe 
-the same thing but differ in their unit of analysis. In pscyhology, a single person 
+the same thing but differ in their unit of analysis. In psychology, a single person 
 is usually the experimental unit (hence "within-subject" variables) whereas in
 agronomy or biology a physical area might be the unit of analysis (hence "split-plot"
-variables). The more general way to talk about these terms is as nested- or 
-crossed-factors. For fully nested factors, an experimental unit is represented in only
+variables). The more general way to talk about these terms is as **nested-** versus 
+**crossed-**factors. 
+
+* For fully **nested** factors, an experimental unit is represented in only
 one of the factors (e.g., a person can only be in the treatment group or the 
-control group). For fully crossed factors, an experimental unit is represented at
+control group). 
+* For fully **crossed** factors, an experimental unit is represented at
 all levels of the factor (e.g., e.g., a person is tested in conditions A, B, and C).
 
-In our example, Treatment and Age-Group are nested factors, because each person
-is represented at only one level of each factor. However, Condition is a 
-crossed factor, because each person is represented at all levels of Condition.
-We can see this more clearly if we plot all of our data.
+In our example, participants are nested within age-group, because each person
+is represented at only one level of that factor (i.e., you are only a younger adult or older adult). 
+However, Condition is a crossed factor, because each person is represented at all levels of Condition 
+(i.e., each person was measured in all three conditions). We can see this more clearly if we plot all of our data.
 
-``` {r plotting crossed and nested factors}
+``` {r plotting crossed and nested factors, warning=FALSE}
 ggplot(data_COND, aes(x = condition, y = speed)) +
   geom_point(aes(fill=group), pch=21, size=2,
-             position=position_jitterdodge(dodge.width = 0.5))+
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
   geom_boxplot(aes(fill=group), col="black",
-               alpha=0.4, width=0.5)+
+               alpha=0.4, width=0.5, outlier.shape=NA)+
   facet_wrap(~age_group)+
   scale_x_discrete(name = "Condition") +
   scale_y_continuous(name = "Speed (m/s)") +
@@ -322,12 +329,12 @@ ggplot(data_COND, aes(x = condition, y = speed)) +
 
 ## 3.1. As an ANOVA...
 For this mixed factorial ANOVA, we have one factor of Condition that varies 
-within subjects, but we have two factors (Age Group and Treatment Group) that 
-vary between subjects. As before, we can directly code this into our analysis
+within-subjects, but we also have a factor of Age Group that 
+varies between subjects. As before, we can directly code this into our analysis
 of variance using the aov() function or using the ezANOVA() function from the "ez" 
 package. 
 ``` {r mixed factorial ANOVA the hard way, echo=TRUE}
-summary(aov(speed ~ age_group*group*condition + Error(subID/condition), data=data_COND))
+summary(aov(speed ~ age_group*condition + Error(subID/condition), data=data_COND))
 ```
 
 Or we can use the ezANOVA() function from the "ez" package. 
@@ -336,13 +343,13 @@ ezANOVA(data = data_COND,
     dv = .(speed),
     wid = .(subID),
     within = .(condition),
-    between = .(group, age_group)
+    between = .(age_group)
 )
 ```
 
 The ezANOVA() function provides us with more detail, for instance automatically
 providing Mauchly's Test for Sphericity and both the Greenhouse-Geisser and Hyunh-Feldt
-corrections in the event that the sphericity assumption is violated. Most importantly,
+corrections in the event that the sphericity assumption is violated. Most importantly, however,
 the outputs of these two functions agree when we look at the f-statistics for all
 main-effects and interactions when sphericity is assumed.
 
@@ -353,75 +360,82 @@ main-effects and interactions when sphericity is assumed.
 For this mixed-factorial design, we need to account for the fact that we have
 multiple observations coming from each person, so we will add a random-effect of 
 "subID". After accounting for this statistical dependence in our data, we can now 
-fairly test the effects of Group, Age Group, and Condition with residuals that are
+fairly test the effects of Age Group, and Condition with residuals that are
 independent of each other. 
 
 ```{r mixed factorial ANOVA in a mixed effects model, echo=TRUE}
 # First we will define our model
-mod1 <- lmer(speed ~ 
+mod3 <- lmer(speed ~ 
                # Fixed Effects:
-               group*age_group*condition + 
+               age_group*condition + 
                # Random Effects
                (1|subID), 
                # Define your data, 
              data=data_COND, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod3)
 ```
 
+Critically, note that the f-statistics and degrees of freedom all match our ANOVA outputs (when sphericity is assumed), 
+with a main-effect of Age Group, F(1,38)=47.18, Condition, F(2,76)=27.27, and the 
+Age Group x Condition interaction, F(2,76)=5.48.
+
 If we want to delve deeper into our model, we can also use the summary() function
-to get more information about model fit statistics, parameter estimates, random-effects
+to get more information about model fit statistics, parameter estimates, random-effects,
 and residuals. 
 
 ```{r}
-summary(mod1)
+summary(mod3)
 ```
 
 
 
-# 4. Mixed-Factorial ANOVA with Multiple Crossed Factors 
-## (Multi-Way Split-Plot Design)
+# 4. MER as Mixed-Factorial ANOVA with Multiple Crossed Factors 
+## 2 (Age Group) x 3 (Condition) x 4 (Trial) ANOVA
 Next, we will consider the more complicated example of our fully factorial design
-with nested factors of Group and Age-Group, and crossed factors of Condition and
+with a nested factor of Age-Group, and crossed factors of Condition and
 Time.
 
 ``` {r plotting multiple crossed and nested factors}
 DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
-  geom_point(aes(fill=group), size=2, shape=21,
-             position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=group), col="black", 
-               alpha=0.4, width=0.5)+
-  facet_wrap(~condition+age_group)+
-  scale_x_discrete(name = "Time") +
+  geom_point(aes(fill=age_group), size=2, shape=21,
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
+  geom_boxplot(aes(fill=age_group), col="black", 
+               alpha=0.4, width=0.5, outlier.shape = NA)+
+  labs(fill="Age Group")+
+  facet_wrap(~condition)+
+  scale_x_discrete(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
+        legend.position = "bottom")
 ``` 
 
 
 ## 4.1. As an ANOVA...
 For this mixed factorial ANOVA, we have two factors that vary within subjects, 
-Condition and Time, and we have two factors that vary between subjects, 
-Age Group and treatment Group. As before, we can directly code this into our analysis
+Condition and Time, and we have one factor that varies between subjects, 
+Age Group. As before, we can directly code this into our analysis
 of variance using the aov() function or using the ezANOVA() function from the "ez" 
 package. 
-``` {r multiway factorial ANOVA the hard way, echo=TRUE}
-summary(aov(speed ~ age_group*group*condition*time + Error(subID/(condition*time)), data=DATA))
+``` {r multiway factorial ANOVA the hard way, echo=TRUE, warning=FALSE}
+summary(aov(speed ~ age_group*condition*time + Error(subID/(condition*time)), data=DATA))
 ```
 
-```{r multiway factorial ANOVA the ez way, echo=TRUE}
+```{r multiway factorial ANOVA the ez way, echo=TRUE, warning=FALSE}
 ezANOVA(data = DATA, 
     dv = .(speed),
     wid = .(subID),
     within = .(condition, time),
-    between = .(group, age_group)
+    between = .(age_group)
 )
 ```
 
@@ -430,32 +444,47 @@ ezANOVA(data = DATA,
 ## 4.2. Multi-Way Mixed Factorial ANOVA as a mixed-effect model...
 For this mixed-factorial design, we need to account for the fact that we have
 multiple observations coming from each person, but we also need to acocunt for the 
-fact that we multiple observations for each Condition and at each Time. In order
-to account for this non-independence in our data, we need to include random-effects
+fact that we multiple observations for each Condition and on each Trial. In order
+to account for this dependence in our data, we need to include random-effects
 of subject, subject:condition, and subject:time. Adding these random-effects to our 
 model will make our mixed-effects model statistically equivalent to the mixed-factorial
 ANOVAs that we ran above.
 
 ```{r multiway factorial ANOVA in a mixed effects model, echo=TRUE}
 # First we will define our model
-mod1 <- lmer(speed ~ 
+mod4 <- lmer(speed ~ 
                # Fixed Effects:
-               group*age_group*condition*time + 
+               age_group*condition*time + 
                # Random Effects
                (1|subID)+(1|condition:subID)+(1|time:subID), 
                # Define your data, 
              data=DATA, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod4)
 ```
+
+Note that the f-statistics and the degrees of freedom match what we got from the 
+ANOVA tables above (when sphericity is assumed). There are a lot of effects so I 
+wont list them all, but note the main-effects of Age Group, F(1,38)=47.18, 
+Condition, F(2,76)=27.27, and Time, F(3,114)=113.88.
+
+Readers familiar with repeated measures ANOVA wont be surprised to see that that the 
+output of the aov() function partitions the effects into different sections. The 
+between-subject effect of Age Group is evaluated using residual error at the level of 
+"Error:subID". The effects of Condition and Age Group x Condition are evaluated 
+using residuals of "Error: subID:condition". This is precisely what we are doing
+when we include the three different random-intercepts in the mixed-effects regression.
+The $(1|subID)$ partitions out the average individual differences between subjects, 
+$(1|condition:subID)$ and $(1|time:subID)$ partitions out the variance at the different
+levels of our repeated measures.
 
 If we want to delve deeper into our model, we can also use the summary() function
 to get more information about model fit statistics, parameter estimates, random-effects
 and residuals. 
 
 ```{r}
-summary(mod1)
+summary(mod4)
 ```
 
 

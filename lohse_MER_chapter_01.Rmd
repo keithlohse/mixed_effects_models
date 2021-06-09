@@ -1,24 +1,26 @@
 ---
 title: 'Chapter 1: An Introduction to Mixed-Effect Models'
 author: "Keith Lohse, PhD, PStat"
-date: '2020-02-14'
+date: '2021-06-09'
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
 
 # What are mixed-effects models?
 
-In a traditional general linear model (GLM), all of our data are independent (i.e., one data point per person). Statistically, we can write this as a linear model like: 
+In a traditional general linear model (GLM), all of our data are independent (e.g., one data point per person). Statistically, we can write this as a linear model like: 
 $$y_i=\beta_0+\beta_1(Time_i)+\epsilon_i$$
 
 Each subject's actual score ($y_i$) is the result of an intercept ($\beta_0$) and that constant is modified based on Time (the slope, $\beta_1$ multiplied by the Time variable). The intercept and slope are collectively referred to as our statistical *MODEL*. Our model is not going to be perfect, however, so we need to include an error term ($\epsilon_i$). Good models will have small errors and thus be a better approximation of our *DATA*. As such, we can more generally say that:
 $$Data_i = Model_i + Error_i $$
 
-Mixed-effect regressions are an extension of the general linear model, but they include *random-effects* in addition to the more traditional *fixed-effects* of our models. These random-effecs allow us to account for statistical dependencies in our data. For instance, consider the following situation:
-```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
+Mixed-effect regressions are an extension of the general linear model, but they include *random-effects* in addition to the more traditional *fixed-effects* of our models. Theoretical definitions of these effects can pretty intense, but you can think about fixed-effects as variables where all of the levels we are interested are present in the data (e.g., our treatment and control groups are fixed. If someone is interested in other treatments, they need to run another experiment). Random-effects, in contrast, are those variables that reflect variables that we are interested in generalizing outside of a particular study (e.g., if we randomly sample students from different schools, both students and schools could be treated as random-effects, because we want to generalize the results to other students/schools whom we didn't even measure). 
+
+In practice, I find it helpful to think about the fixed-effects as the variables about which we are testing hypotheses, and the random-effects allow us to account for statistical dependencies in our data, making sure we get the standard errors correct for the calculation of *z*-, *t*-, or *F*-statistics. For instance, consider the following situation:
+```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
 library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
@@ -28,7 +30,7 @@ data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
 head(data_TIME)
 ```
 
-``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
+``` {r plotting the effects of time, echo=FALSE, fig.align="center", warning=FALSE}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   geom_point(aes(fill=subID), pch=21, size=2)+
   geom_line(aes(col=subID), alpha=0.4)+
@@ -43,13 +45,13 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
   
 ```
 
-These hypothetical data come from a cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiey provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower.
+These hypothetical data come from a cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiety provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower.
 
 It would be tempting to model these data using our traditional GLM where there was a fixed-effect of time. However, that would ignore the fact that time varies within each person and this violates one of our primary regression assumptions: that residuals are *independent* of each other. 
 
-To ensure that we have independent residuals, we need to account for the fact that we have multiple observations per person. To do this, we can add a random-effect of subject:
+To ensure that we have independent residuals, we need to account for the fact that we have multiple observations per person. The first step in this direction is to add a *random-effect of subject*:
 $$y_{ij}=\beta_0+U_{0j}+\beta_1(Time_{ij})+\epsilon_{ij}$$
-The random-effect of subject ($U_j$) allows each subject to have a separate intercept ($\beta_0+U_{0j}$). As such, we would refer to this model as a *random-intercepts; fixed-slope* model, because even though each subject has a unique intercept all subjects would have the same slope ($\beta_1$). 
+The random-effect of subject ($U_j$) allows each subject to have a separate intercept ($\beta_0+U_{0j}$) for each person. As such, we would refer to this model as a *random-intercepts; fixed-slope* model, because even though each subject has a unique intercept all subjects would have the same slope ($\beta_1$). 
 
 If we wanted to estimate a unique trajectory (i.e, slope) for each subject, then we we would need to add a random-slope to our model: 
 $$y_{ij}=\beta_0+\beta_1(Time_{ij})+U_{0j}+U_{1j}(Time_{ij})+\epsilon_{ij}$$
@@ -58,7 +60,7 @@ $$y_{ij}=(\beta_0+U_{0j})+(\beta_1+U_{1j})(Time_{ij})+\epsilon_{ij}$$
 
 In this *random-intercepts; random-slopes* model, we estimate a unique trajectory for each person ($(\beta_1+U_{1j})(Time_{ij})$). Visually, that model would look something like this:
 
-``` {r time by group, echo=FALSE, fig.align="center"}
+``` {r time by group, echo=FALSE, fig.align="center", warning=FALSE}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   stat_smooth(aes(col=subID, lty=age_group), method="lm", se=FALSE, alpha=0.4)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -75,26 +77,26 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
   
 ```
 
-Linear trajectories for each group are plotted as solid lines (older adults) and dashed lines (younger adults). The thick black lines represent the group level trajectories ($\beta_0 +\beta_1(Time_{ij})$) in group. The estimated trajectories for each subject are color-coded based on the individual subjects. The intercepts for these lines are captured by the group-level intercept plus the individual distance from that intercept ($\beta_0+U_{0j}$). The slopes for these lines are captured by the group-level slope plus the individual distance from that slope ($(\beta_1+U_{1j})(Time_{ij})$). Note that these random-effects ($U$'s) could be positive or negative, because they represent how this participant deviates from the norm. Thus, our *mixed-effects* MODEL is the combination of our fixed-effects (all of the $\beta$'s) and the random-effects (all of the $U_j$'s). However, $DATA = MODEL + ERROR$ still applies, so we need to include a random-error term for each data point, $ϵ_{ij}$.
+Linear trajectories for each group are plotted as solid lines (older adults) and dashed lines (younger adults). The thick black lines represent the group level trajectories ($\beta_0 +\beta_1(Time_{ij})$) in each group. The estimated trajectories for each subject are color-coded based on the individual subjects. The intercepts for these lines are captured by the group-level intercept plus the individual distance from that intercept ($\beta_0+U_{0j}$). The slopes for these lines are captured by the group-level slope plus the individual distance from that slope ($(\beta_1+U_{1j})(Time_{ij})$). Note that these random-effects ($U$'s) could be positive or negative, because they represent how a given participant deviates from the group. Thus, our *mixed-effects* MODEL is the combination of our fixed-effects (all of the $\beta$'s) and the random-effects (all of the $U_j$'s). However, $DATA = MODEL + ERROR$ still applies, so we need to include a random-error term for each data point, $ϵ_{ij}$.
 
 In summary, we have the following terms to explain our *DATA*:
 
-1. The *MODEL* includes fixed effects and random effects.
-2. Fixed-Effects are the group-level $\beta$'s, these effects parallel the traditional main-effects and interactions that you have probably encountered in other statistical analyses.
-3. Random-Effects are the participant-level $U_j$'s that remove statistical dependency from our data. (This is bit of a simplification, but you can think of not including the appropriate random-effects like running a between-subjects ANOVA when you should be running a repeated-measures ANOVA.)
-4. The *ERRORS*, or more specifically Random Errors, are the difference between our *MODEL*'s predictions and the actual *DATA*, $\epsilon_{ij}$'s.
+1. The **MODEL** includes fixed effects and random effects.
+2. **Fixed-Effects** are the group-level $\beta$'s, these effects parallel the traditional main-effects and interactions that you have probably encountered in other statistical analyses.
+3. **Random-Effects** are the participant-level $U_j$'s that account for statistical dependencies in our data. (This is bit of a simplification, but you can think of not including the appropriate random-effects like running a between-subjects ANOVA when you should be running a repeated-measures ANOVA.)
+4. The **ERRORS**, or more specifically Random Errors, are the difference between our **MODEL**'s predictions and the actual **DATA**, $\epsilon_{ij}$'s.
 
 ## But our model doesn't look very linear? 
-Correct! In looking at the figures, it certainly doesn't look like a straight line is the best description our data. There appear to be diminishing returns in the effect of trial, there is a large reduction in velocity from Trial 1 to Trial 2, but that reduction gets smaller to Trial 3 and to Trial 4. Mathematically, we could try explain this curvature using *curvilinear* model or a *non-linear* model. 
+Correct! In looking at the figures, it certainly doesn't look like a straight line is the best description our data. There appear to be diminishing returns in the effect of trial; there is a large reduction in velocity from Trial 1 to Trial 2, but that reduction gets smaller to Trial 3 and to Trial 4. Mathematically, we could try explain this curvature using *curvilinear* model or a *non-linear* model. 
 
-A curvilinear model creates a curving line, but is linear in its parameters. The most common way this is accomplished is adding polynomials to our model (e.g., $x, x^2, x^3$). For instance, in the equation below, our model is linear its parameters, but by raising $x$ to different powers and adding those factors together, we can model a curvilinear relationship between $x$ and $y$.
+A curvilinear model creates a curving line, but is linear in its parameters. The most common way this is accomplished is adding polynomials to our model (e.g., $x, x^2, x^3$). For instance, in the equation below, our model is linear its parameters ($\beta$s added to $\beta$s ), but by raising $x$ to different powers and adding those factors together, we can make a curvilinear relationship between $x$ and $y$.
 $$y_i = \beta_0 + \beta_1(x_{1i}) +\beta_2(x^2_{2i})+\epsilon_i$$
 
-In contrast, a non-linear model is *not* linear in its parameters. For instance, relationships that follow a power-function or an exponentional-function (shown below) do not result from linear combination of the parameters (i.e., addition) and instead have more complex relationships. 
+In contrast, a non-linear model is *not* linear in its parameters. For instance, relationships that follow a power-function or an exponential-function (shown below) do not result from linear combinations (simple addition/subtraction) of the parameters and instead have more complex relationships. 
 $$y_i = \alpha+\beta*e^{(-\gamma/x_i)}$$
 We *can* model non-linear relationships using mixed-effects regression, but that is more complicated topic that we will need to save for a later time. For now, let's focus on what a curvilinear model might look like in our data:
 
-``` {r curvilinear time by group, echo=FALSE, fig.align="center"}
+``` {r curvilinear time by group, echo=FALSE, fig.align="center", warning=FALSE}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   stat_smooth(aes(col=subID, lty=age_group), method="lm", 
               formula=y~poly(x,2), se=FALSE, alpha=0.4)+
@@ -112,23 +114,23 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
   
 ```
 
-Visually, this curvilinear model looks like it is providing a much better explanation our data, because there is a closer correspondence between our model estimate (the lines) and the real data (individual data points). Within each group, these lines would come from a mixed-effects model that looks like this:
+Visually, this curvilinear model looks like it is providing a much better explanation our data, because there is a closer correspondence between our model estimates (the lines) and the real data (individual data points). Within each group, these lines would come from a mixed-effects model that looks like this:
 $$y_{ij}=(\beta_0+U_{0j})+(\beta_1+U_{1j})(Time_{ij})+(\beta_2+U_{2j})(Time^2_{ij})+\epsilon_{ij}$$
 The thick black lines correspond to the group-level estimates ($\beta$'s) and the thin lines correspond to the estimates for each individual participant ($(\beta+U)$'s). It looks like our curvilinear model has explained a lot of the within-participant variability, because the difference between our estimates and the data ($\epsilon$'s) are very small. However, there does seem be a fair amount of variability between participants ($U$'s) that remains to be explained. 
 
-I hope this brief introduction gives you some sense of what mixed-effects regression is and what it can do. Mixed-effect regression is a very useful analytical tool when it comes the analysis of longitudinal data or in study designs where participants are exposed to different conditions (i.e., repeated measures designs). Although mixed-effects regression is very useful in these study designs, the more commonly used method of analysis is repeated measures analysis of variance (RM ANOVA). 
+I hope this brief introduction gives you some sense of what mixed-effects regression is and what it can do. Mixed-effect regression is a very useful analytic tool when it comes to longitudinal data or in designs where the same participants are repeatedly exposed to different conditions (i.e., repeated measures/within-subject designs). Although mixed-effects regression is very useful in these study designs, the more commonly used method of analysis is repeated measures analysis of variance (RM ANOVA). 
 
 RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but in many contexts, researchers use a RM ANOVA when a mixed-effect regression might be more appropriate or effective. Lohse, Shen, and Kozlowski (2020) provide a more detailed contrast of these two methods, but I have recreated some of the central arguments from that paper below. 
 
-# Constrast Mixed-Effects Regression and RM ANOVA:
+# Constrasting Mixed-Effects Regression and RM ANOVA:
 * **Model concept**
     - **RM ANOVA**:
         * Compares means of a continuous outcome stratified by one or more categorical variable(s) to the grand mean. 
-        *	Individuals are treated as a factor with error aggregated from each individual’s mean of repeated measures and partitioned as intra-individual variance from the error term.
+        *	Individuals are treated as a factor with error aggregated from each individual’s mean of the repeated measures and partitioned as intra-individual variance from the error term.
 
     - **Mixed-Effects Regression**:
         *	Accounts for correlations in data with clustered or nested structure. 
-        * In longitudinal models, change over time is considered a within-person factor accounting for within-person correlations across time points and estimating error as residuals from each individual’s trajectory, and between-person error is accounted for as random effects in a correlation matrix, which can be explained by fixed covariate associations with trajectory parameters.
+        * In longitudinal models, change over time is considered a within-person factor accounting for within-person correlations across time points and estimating error as residuals from each individual’s trajectory. Between-person error is accounted for as random-effects in a correlation matrix, which can be explained by fixed-effects and their interactions with either the intercept or slope parameters.
             
 * **Modeling of the outcome over time**
     - **RM ANOVA**:
@@ -139,13 +141,11 @@ RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but
     - **Mixed-Effects Regression**:
         *	Time is modeled explicitly for the outcome variable as a trajectory of change. 
         *	The model assumes a common pattern of change for the group (fixed effects), but individuals can vary from that pattern (random effects).
-        * The shape of the trajectory is determined by fitting progressively more complex mathematical functions that are likely to fit the pattern of raw data scores, and testing a fit statistic (e.g., Akaike Information Criterion or Bayesian Information Criterion).
-        * Of particular use is the ability to estimate the magnitude and timing of a plateau or other milestone on the trajectory. 
+        * The shape of the trajectory is determined by fitting progressively more complex mathematical functions that are likely to fit the pattern of raw data scores, and testing a fit statistic (e.g., *Akaike Information Criterion* or *Wald Test of the Change in Deviance*).
 
 * **Variability in timing of data points**
     - **RM ANOVA**:
-        *	Requires common, discreet time points; variability in actual timing may contribute to measurement error in categorized time points. 
-        * Measurement error may accrue within time points if outcome measurement varies by time within a time point, e.g., measurement at a time point varies by ± time units around that point. Individuals’ scores on an increasing trajectory may be overestimated if captured before the time point or underestimated if captured after.  
+        *	Requires common, discreet time points; variability in actual timing may contribute to measurement error in categorized time points.         * Measurement error may accrue within time points if outcome measurement varies by time within a time point, e.g., measurement at a time point varies by ± time units around that point. Individuals’ scores on an increasing trajectory may be overestimated if captured before the time point or underestimated if captured after.  
 
     - **Mixed-Effects Regression**:
         *	Can accommodate variability in spacing of time points and in the actual timing of individual data collection. 
@@ -156,13 +156,11 @@ RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but
     - **RM ANOVA**:
         *	Missing outcome data cannot be accommodated, without complicated statistical adjustments (such as multiple imputation) when data are missing at random. 
         * Including only cases with complete data will reduce statistical power and risk bias to the model if data are missing not at random (MNAR).
-        * Depending on the method employed, imputing missing values may not bias parameter estimates, but may reduce standard errors risking Type I errors in hypothesis tests.
 
     - **Mixed-Effects Regression**:
-        *	Data that is if missing at random (MAR) can be accommodated without excluding cases.
+        *	Data that meet the missing at random (MAR) assumption can be accommodated without excluding cases.
         * However, models can be biased if important time points are missing (e.g., no data where important change occurs). 
-        * Models with data that is MNAR can be fit, but models may be biased. For example, an unbalanced data set is one in which later time points are more likely to be missing, which can occur due to drop out, or outcome measurement that is performed during an intervention that varies for individuals. 
-        * Imputation of outcome data is generally not recommended.
+        * Models with data that are MNAR can be fit, but models will be biased. For example, an unbalanced data set is one in which later time points are more likely to be missing, which can occur due to drop out, or outcome measurement that is performed during an intervention that varies for individuals. 
 
 * **Data missing on covariates**
     - **RM ANOVA**:
@@ -181,10 +179,17 @@ RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but
         * Time varying covariates can be included, but you need to careful about collinearity and variance at both the between- and within-subject levels.
 
 # Conclusions
-Hopefully, this introduction gives you a sense of what mixed-effect regression is and what it can do. There are a whole host of topics that we haven't covered yet, but mixed-effect regression is an incredibly flexible and powerful method for analyzing your data. That flexibility comes at a cost, however, as analytical flexibility also means greater complexity and there are a lot of choices that an analyst must make that can have significant influence on the results.
+I know that is a lot, but I hope it helps you find your footing with mixed-effect models. There are a whole host of topics that we haven't covered yet, but we will dig into at least some of those topics in the next chapters. Mixed-effect regression is an incredibly flexible and powerful method for analyzing your data, but that flexibility comes at a cost. Analytic flexibility also means greater complexity and there are a lot of choices that an analyst must make that can have significant influence on the results. These modules will be no means be exhaustive, but I want to introduce you to:
 
-That said, in the following modules I want to explain how mixed-effect regression is useful for factorial designs with repeated measures, truly longitudinal designs, and designs that mix repeated measures with time series data. 
+* **Mixed-effects regression for factorial designs**: This chapter explains mixed-effect regression as an analogue to factorial ANOVA. If you have categorical repeated measures, this chapter is for you!
+
+* **Mixed-effect regression for longitudinal designs**: If you truly have time series data (rather than categorical repeated measures), then it is important to capture the trajectories of your individual subjects. Whether you are measuring time on the order seconds, days, or years, this chapter is for you!
+
+* **Mixed-effect regression for time-series within factors**: Combining the two chapters above, I will explain how you can use mixed-effects to model time-series data within different conditions. Do you want to look at trial-by-trial effects under different conditions? Maybe you want to measure blood glucose levels after your subjects ate vegan cookies and celery (in a counter balanced order of course). If so, this chapter is for you. 
+
+Finally, I will provide a list of resources that I hope will be helpful on your journey deeper into mixed-effects models. These chapters provide a foundation, but fall far short of teaching you everything you need/want to know. Fortunately, there are some other great textbooks and online modules that can help you learn.
+
 
 
 # References
-Lohse, K. R., Shen, J., & Kozlowski, A. J. (2020). Modeling Longitudinal Outcomes: A Contrast of Two Methods. Journal of Motor Learning and Development, 1(aop), 1-21. doi: https://doi.org/10.1123/jmld.2019-0007
+Lohse, K. R., Shen, J., & Kozlowski, A. J. (2020). Modeling Longitudinal Outcomes: A Contrast of Two Methods. Journal of Motor Learning and Development, 8(1), 145-165. doi: https://doi.org/10.1123/jmld.2019-0007

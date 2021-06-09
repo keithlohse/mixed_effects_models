@@ -1,0 +1,31 @@
+---
+title: "Further Readings and Recommendations"
+author: "Keith Lohse, PhD, PStat"
+date: "2021-06-09"
+output:
+  html_document:
+    df_print: paged
+---
+
+Below are some recommended readings and other resources for mixed-effects models, 
+both in factorial designs and for truly longitudinal models.
+ 
+  1. Long, J. D. (2012). *Longitudinal data analysis for the behavioral sciences using R.* Sage.
+  
+  2. Singer, J. D., Willett, J. B., & Willett, J. B. (2003). *Applied longitudinal data analysis: Modeling change and event occurrence.* Oxford university press.
+ 
+  3. Raudenbush, S. W., & Bryk, A. S. (2002). *Hierarchical linear models: Applications and data analysis methods* (Vol. 1). Sage.
+ 
+  4. Garcia, T. P., & Marder, K. (2017). Statistical approaches to longitudinal data analysis in neurodegenerative diseases: Huntington’s disease as a model. *Current Neurology and Neuroscience Reports*, 17(2), 14.
+ 
+  5. Lohse, K. R., Shen, J., & Kozlowski, A. J. (2020). Modeling longitudinal outcomes: A contrast of two methods. *Journal of Motor Learning and Development*, 8(1), 145-165.
+  
+  6. Dr. Daniel Wollschläger has a great online reference for mixed-effect models in different factorial designs: http://www.dwoll.de/rexrepos/posts/anovaMixed.html 
+  
+  7. This book is definitely a bit more dense, but is a fantastic resource for both linear and nonlinear mixed models: Pinheiro, J., & Bates, D. (2006). *Mixed-effects models in S and S-PLUS*. Springer Science & Business Media.
+  
+  8. And, as always, the lme4 manual is super important to read if your haven't already: Bates, D., Mächler, M., Bolker, B., & Walker, S. (2014). Fitting linear mixed-effects models using lme4. *arXiv preprint* arXiv:1406.5823.
+  
+  9. Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. (2017). lmerTest package: tests in linear mixed effects models. *Journal of statistical software*, 82(13), 1-26.
+  
+  10. Josh Errickson also has a nice visualization of crossed versus nested variables and how they can be represented as random-effects: https://errickson.net/stats-notes/vizrandomeffects.html 
