@@ -1,32 +1,29 @@
 ---
 title: 'Chapter 3: Mixed-Effects Models for Longitudinal Data'
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-20"
+date: "2021-06-09"
 output:
   html_document:
     df_print: paged
   pdf_document: default
 ---
 
-Working with same dataset we used before, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable. We will do this using two different datasets. 
+Working with a new dataset, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable.  
 
-1. For the first dataset, we will use the same hypothetical experiment we used before: a hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiey provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at exactly the same time for each person, so there is no between-subject variability in the time variable. 
+In our previous dataset, we used the hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiety provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at exactly the same time for each person, so there is no between-subject variability in the time variable. 
 
 
-```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
+```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
+                 stringsAsFactors = TRUE)
 
 data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
 data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
-data_TIME$time.sq <- data_TIME$time^2
-data_TIME$time.c <- data_TIME$time-mean(data_TIME$time, na.rm=TRUE)
-data_TIME$time.c.sq <- data_TIME$time.c^2
-data_TIME$old.c<-(as.numeric(data_TIME$age_group)-1.5)*(-1)
 ```
 
-``` {r plotting the effects of time, echo=FALSE, fig.align="center"}
+``` {r plotting the effects of time, echo=FALSE, fig.align="center", fig.height = 4, fig.width = 7}
 ggplot(data_TIME, aes(x = time, y = speed)) +
   geom_line(aes(group=subID), col="black", alpha=0.8)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -42,14 +39,14 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
 ```
 
 
-2. For the second dataset, we will use some new fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilition. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 1 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
+For the current example though, we will use some new fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilitation. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 20 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
 
 ```{r, reading in second data, results="hide", message = FALSE, echo=FALSE}
-DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv")
-
+DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv",
+                 stringsAsFactors = TRUE)
 ```
 
-``` {r plotting rehab data, echo=FALSE, fig.align="center"}
+``` {r plotting rehab data, echo=FALSE, fig.align="center", fig.height = 4, fig.width = 8}
 ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
   geom_line(aes(group=subID), col="black", alpha=0.8)+
   geom_point(aes(fill=subID), pch=21, size=2)+
@@ -65,29 +62,40 @@ ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
 ```
 
 
-We will explore both of these scenarios in more detail below. One of the key differences between these models and the factorial models we considered before is that now we will need to deal with **model comparisons**. In the factorial designs, we knew which factors we wanted to include in our model and we always tested the fully factorial design (i.e., all main-effects and interactions). In contrast, for these longitudinal models, we will need to compare different ways to represent time (e.g., linear versus curvilinear models). After we compare models to decide on the best to model time, we can start adding in other variables to explain the differences in individual trajectories. 
+We will explore these data in more detail below. One of the key differences between these models and the factorial models we considered before is that now we will need to deal with **model comparisons**. In the factorial designs, we knew which factors we wanted to include in our model and we always tested the fully factorial design (i.e., all main-effects and interactions). In contrast, for these longitudinal models, we will need to compare different ways to represent time (e.g., linear versus curvilinear models). After we compare models to decide on the best to model time, we can start adding in other variables to explain the differences in individual trajectories. 
 
-In order to do this, we will need to use **Full Maximum-Likelihood** to estimate the different model parameters rather than **Restricted Maximum-Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistcally better than another model. I will cover these topics briefly below, but they will also be covered in details in the modules Methods of Estimation and Model Comparison (coming soon).
+In order to do this, we will need to use **Full Maximum-Likelihood** to estimate the different model parameters rather than **Restricted Maximum-Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistically better than another model. I will cover these topics briefly below, but I would direct interested readers to Jeff Longs, *Longitudinal Data Analysis for the Behavioral Science using R* for a more detailed discussion.
 
 
-# 1. Modeling Changes in Speed across 4 Trials
-Starting with modeling changes in speed across four trials of practice, we can test a series of **unconditional** random-effects models to decide how we want to model the effect of time. These models are said to be "unconditional" because the effect of time does not depend on any other variables. In this series of models, the goal is establish the best fitting "shape" of our time variable (e.g., should time be linear or quadratic) and which random-effects are essential to include in the model. 
+# 1. Modeling Changes in Functional Independence over Time
+Starting with modeling changes in functional independence across 18 months of rehabilitation, we can test a series of **unconditional** random-effects models to decide how we want to model the effect of time. These models are said to be "unconditional" because the effect of time does not depend on any other variables. In this series of models, the goal is to establish the best fitting "shape" of our time variable (e.g., should time be linear or quadratic?) and which random-effects are essential to include in the model. 
 
-In these models, we will mean-center time to create a new variable time.c ($time_i - \overline{time}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value on Trial 0 (which does exist) to the predicted value on average over time. (Note that the "average trial" also doesn't exist, but has a more useful interpretation.)  
+In these models, I am first going to convert time from months into years in order to avoid any scaling issues in our models. You could also center time around the average time, which I call  *year.c* in the models below ($year_i - \overline{year}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value when Time is 0, to the predicted value on average over time.
+```{r}
+# Centering time on the first point and converting to years:
+DAT2$year.0 <- (DAT2$time-1)/12
+DAT2$year.0_sq<-DAT2$year.0^2
+DAT2$year.0_cu<-DAT2$year.0^3
+
+# Centering time on the mean time:
+DAT2$year.c <- scale(DAT2$time)
+DAT2$year.c_sq<-DAT2$year.c^2
+DAT2$year.c_cu<-DAT2$year.c^3
+```
+Centering time on the first time point and centering time on the mean are equally appropriate choices mathematically, but they do change how we will interpret the intercept, so it is very important to understand how your variables are coded. In general, **treating the first data point as time = 0 makes the intercept more interpretable**. However, **mean-centering (or z-transforming) the time variable can help reduce collinearity in a model, especially when interactions are present**.
+
 
 ## 1.1. Unconditional Models of Time
 ### 1.1.1. Fixed-Slope Random-Intercepts Model
 ```{r}
-# Fixed slope random intercepts model ---- 
-raneff_00<-lmer(speed~ 
-                  # Fixed-effects 
-                  1+time.c+ 
-                  # Random-effects 
-                  (1|subID), data=data_TIME, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-
+# Random intercepts model ---- 
+raneff_00<-lmer(rasch_FIM~
+                # Fixed-effects
+                1+
+                # Random-effects
+                (1|subID), data=DAT2, REML=FALSE,
+                control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=5e5)))
 summary(raneff_00)
 ```
 
@@ -95,54 +103,51 @@ summary(raneff_00)
 ### 1.1.2. Random-Slopes Random-Intercepts Model
 ```{r}
 # Random slope random intercepts model ---- 
-raneff_01<-lmer(speed~ 
-                  # Fixed-effects 
-                  1+time.c+ 
-                  # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
+raneff_01<-lmer(rasch_FIM~
+                # Fixed-effects
+                1+year.0+
+                # Random-effects
+                (1+year.0|subID), data=DAT2, REML=FALSE,
+                control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=5e5)))
 summary(raneff_01)
 ```
 
 
 ### 1.1.3. Quadratic Random-Slopes Random-Intercepts Model
 ```{r}
-# Quadratic slope random intercepts model ---- 
-raneff_02<-lmer(speed~ 
-                  # Fixed-effects 
-                  1+time.c+time.c.sq+ 
-                  # Random-effects 
-                  (1+time.c+time.c.sq|subID), data=data_TIME, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
+# Random quadratic slopes and intercepts model ---- 
+raneff_02<-lmer(rasch_FIM~
+                # Fixed-effects
+                1+year.0+year.0_sq+
+                # Random-effects
+                (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
+                control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=5e5)))
 summary(raneff_02)
 ```
-Notice that in this last model we get a warning message, **"boundary (singular) fit: see ?isSingular"**. This message arises because one of the parameters we are estimating either is very close to the edge or on the edge of it's parameter space. Looking at our model output, the culprit appears to be the correlation between the linear and quadratic random slopes $r = -0.96$. Given the high correlation between these random-effects, that suggests we could simplify our model structure by removing the *higher order* random-effect. As such, let's take the quadratic random-effect out of our model and re-fit it. (Note that here the correlation is just very very strong, $-0.96$, if this correlation was $1.00$ we would definitely want to remove it.) 
-```{r}
-# Fixed Quadratic slope random intercepts model ---- 
-raneff_02<-lmer(speed~ 
-                  # Fixed-effects 
-                  1+time.c+time.c.sq+ 
-                  # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
 
-summary(raneff_02)
+### 1.1.4. Cubic Random-Slopes Random-Intercepts Model
+```{r}
+# Random cubic slopes and intercepts model ---- 
+raneff_03<-lmer(rasch_FIM~
+                # Fixed-effects
+                1+year.0+year.0_sq+year.0_cu+
+                # Random-effects
+                (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=2e5)))
+summary(raneff_03)
 ```
 
 ## 1.2. Comparing between the Different Models
-Now that we have created several different models, how do we decide which models are the best? How do we decide which parameters to include and which parameters are "statistically significant"? When it comes to mixed-effect linear models (or other forms of "multi-level" models), we use a similar criterion to traditional regression. That is, we still rely on the general idea that.
-
+Now that we have created several different models, how do we decide which models are the best? How do we decide which parameters to include and which parameters are "statistically significant"? When it comes to mixed-effect linear models (or other forms of "multi-level" models), we use a similar criterion to traditional regression. That is, we still rely on the general idea that: 
 $$ Data_i = Model_i + Error_i $$
 
-... and if the error is reduced by a large enough magnitude, then we will call that effect statistically significant (i.e., the parameter reduced error by an unusually larger amount under the null-hypothesis.). However, there are some differences between mixed-effect models and traditional Ordinary Least Squares regression.
+... and if the error is reduced by a large enough magnitude, then we will call that effect statistically significant (i.e., the parameter reduced error by an unusually larger amount under the null-hypothesis.). However, there are some key differences between mixed-effect models and traditional Ordinary Least Squares regression that we need to discuss.
 
 
-For instance, you might have noticed that p-values are conspicuously absent from the LME4 output. The reasons for this are complicated, but it has to do with the fact that these models can have statistical dependencies and unbalanced/missing data that do not make the calculation of traditional p-values tenable. In short, your denominator degrees of freedom can get a little crazy. (You can also read an explanation from Doug Bates, author of the lme4 package, here: https://stat.ethz.ch/pipermail/r-help/2006-May/094765.html). However, the main things that you should know are:
+For instance, you might have noticed that p-values are conspicuously absent from the LME4 output. The reasons for this are complicated, but it has to do with the fact that these models can have statistical dependencies and unbalanced/missing data that do not make the calculation of traditional p-values tenable. In short, your denominator degrees of freedom can get a little crazy. (You can also read an explanation from Doug Bates, a main author of the lme4 package, here: https://stat.ethz.ch/pipermail/r-help/2006-May/094765.html). However, the key things that you should know are:
 
 1. If you really, really want p-values for individual parameters, you can get them from packages that implement the Welch-Satterthwaite approximation to estimate the appropriate degrees of freedom, like the "lmerTest"" package.
 
@@ -166,222 +171,82 @@ This formula is kind of scary, but there are two things you need to notice about
 Now we are ready to make a comparison between some of our different statistical models by comparing the change in the Deviance. Let's start by comparing the Random Intercepts, Fixed Slopes, and Random Slopes models using the anova() function in R.
 
 ```{r}
-anova(raneff_00,raneff_01,raneff_02)
+anova(raneff_00,raneff_01,raneff_02, raneff_03)
 ```
 The anova() function gives a number of valuable pieces of information. First, it explicitly lists the models that are being tested. Below, it gives us the model name and the degrees of freedom for each model. It then gives us the Akaike's Information Criterion (AIC), the related Bayesian Information Criterion (or BIC), the log of the Likelihood (or logLik), and the Deviance.
 
-The Random Intercepts model acts as our "benchmark" against which other models can be compared. For instance, the reduction in deviance from the Random Intercepts (Deviance = -163.50) to the Fixed Slopes model (Deviance = -170.48) is 6.98. The change in deviance follows a $\chi^2$ distribution, which allows us to test the statistical significance of the difference between these two models using a classic null hypothesis significance test.
+The Random Intercepts model can act as our "benchmark" against which other models can be compared. For instance, the reduction in deviance from the Random Intercepts (Deviance = 5859.9) to the Random Linear Slopes model (Deviance = 4812.9) is 1041; which is a huge reduction! The change in deviance follows a $\chi^2$ distribution, which allows us to see if model is a statistical signficant improvement beyond the preceeding model.
 
-The Random Slopes model (df = 6) has two more parameters than the Random Intercepts model (df = 4) so the degrees of freedom for the $\chi^2=2$ and the p-value for $\chi^2(2)=6.98, p < 0.001$. Thus, we would conclude that the Random Slopes model is significantly better than the Random Intercepts model. Similarly, the Quadratic Random Slopes model reduces the deviance by 33.11 compared to the Linear Random Slopes model and the p-value for $\chi^2(2)=33.11, p <0.001$. Thus, we would conclude that the quadratic model is also a statistically better model than the linear model (assuming $\alpha = 0.05$).
+The based on the Wald Test of the change in deviance, it appears that all of our models are successive improvements, despite the large increases to the degrees of freedom. The linear model is better than the random-intercepts model, $\chi^2(3)=1046.98, p < 0.001$. the quadratic model is better than the linear, $\chi^2(4)=746.46, p < 0.001$, and the cubic model provides an even better fit than the quadratic, $\chi^2(5)=252.32, p < 0.001$. Thus, we would conclude that the cubic model is the "best" unconditional model (assuming $\alpha = 0.05$).
 
 
 ## 1.4. The Akaike Information Criterion (AIC)
 The AIC is another method to evaluating model fit that is based on the Deviance. Although we won't get into the details of the math behind it, the importance of the AIC is in the name "Information Criterion". That is, the AIC is all about informativeness which is slightly different from just being the model that produces the smallest deviance. For a model to be informative, the parameters need to generalize to other new datasets, not just provide the best explanation of the current data. Therefore, the AIC introduces a penalty to reduce **over-fitting** of the model:
 $$ AIC = Deviance + 2(k) $$
 
-In the formula above, k = number of parameters in the model. Thus, for a parameter to improve the AIC it has to reduce the deviance by >2 times the number of parameters. As mentioned, we won't get into why the magic number of 2(k) seems to work so well, but the key thing to know is that the AIC imposes a penalty based on the number of parameters and is thus a more conservative test than the Wald Test of the change in Deviance.
+In the formula above, k = number of parameters in the model. Thus, for a parameter to improve the AIC it has to reduce the deviance by >2 times the number of parameters. As mentioned, we won't get into why the magic number of 2(k) seems to work so well, but the key thing to know is that **the AIC imposes a penalty based on the number of parameters and is thus a more conservative test than the Wald Test of the change in Deviance**. We can see this in action by comparing our models in the ANOVA output above. Note that the AIC is reliably larger than the simple deviance by a factor of $2*k$. 
 
-We can see this in action by comparing our three random-effects model in the ANOVA output above. Smaller AIC is an indicator of better fit, and you can see that the quadratic model has the smallest AIC (-183.59). Importantly though, compare the AIC to the deviance for each model. The AIC for each individual model is larger than the deviance for that model. This difference is due to the penalty the AIC introduces to prevent overfitting.
+Ultimately, we still arrive at the same conclusion because the cubic model has the lowest AIC. However, it is important that we base this decision on the AIC rather than just the Wald Test of the change in deviance. The reason for this comes back to over-fitting. Note that the cubic model uses 15 degrees of freedom, which is a lot more than the simpler linear model that used only 6. Adding 9 extra parameters is likely to reduce the deviance just by chance, so by introducing a penalty for every additional parameter, we can really make sure that these **additional parameters are pulling their own weight**, so to speak. (For a more detailed explanation of the AIC and it's unique properties for improving generalizability/reducing over-fitting, see Jeff Long's excellent book, *Longitudinal Data Analysis for the Behavioral Sciences using R*). 
 
 As a word of caution, there are no fixed cut-offs for a "statistically significant" change in the AIC although some research has been done exploring how the AIC relates to other measures of effect-size (see Long, 2012). In general, it is a good idea to declare a *minimum change* in the AIC in advance. Keep in mind that *any* reduction in the AIC means that model is explaining more of the deviance than the complexity it has gained in additional parameters. However, we might want to set a minimum difference of 1 whole point or 2 whole points for selecting a "superior" model. For instance, Anderson (2008, chap. 4) describes a $\Delta AIC = 4$ as a "strong" difference in the explanatory power of two models and $\Delta AIC = 8$ as a "very strong" difference. After all, the **exact** AIC would depend on your data conforming to all of your model's assumptions. For that reason, setting a minimum cut-off or 1 or 2 AIC points is useful, because your AIC may not be precise to the level of 0.01 or 0.1. 
 
-For instance, when the sample size is small, there is a good chance that the AIC will be penalizing additional parameters enough to avoid overfitting. To address this issue, researchers have developed the AIC-corrected, or AICc. Assuming that your model is univariate in it's outcome, linear in its parameters, and has (approximately) normally distributed residuals, then the AICc can be calculated by:
+For instance, when the sample size is small, there is a good chance that the AIC will not be penalizing additional parameters enough to avoid overfitting. To address this issue, researchers have developed the AIC-corrected, or $AICc$. Assuming that your model is univariate in it's outcome, linear in its parameters, and has an (approximately) normally distributed residuals, then the AICc can be calculated by:
 $$ AICc = AIC + (2k^2+2k)/(n-k-1) $$
 Where $n$ is the sample size and $k$ is the number of parameters. As such, the AICc is essentially the AIC with an extra penalty on the number of parameters. As the sample size gets larger, the AICc will effectively converge on the AIC. 
+
 These rules-of-thumb should not be treated as hard-cutoffs however, and analysts should treat the AIC continuously. I do think that these guidelines are useful, however, because our models will likely violate our assumptions to some degree. Using integer values of the AIC then, builds in a "buffer" to help us make sure that we are select a model that truly explains more variability than it adds in complexity. 
 
 
 ## 1.5. Creating a Conditional Model of Change over Time
 Once we have settled on our unconditional model of change over time, we can start to add factors to our model to try explain individual differences in these trajectories. 
 
-Specifically, we will add the factor of age-group to our model, as well as interactions between age-group and the linear effect of time and the quadratic effect of time. Note that here we are contrast coding the effect of age-group so that older adults = 0.5 and younger adults -0.5. This means that time-effects can be interpreted as "on average" across both groups. 
-
-```{r}
-# Conditional Model of Time ---- 
-oa_mod_01<-lmer(speed~ 
-                  # Fixed-effects 
-                  1+time.c*old.c+time.c.sq*old.c+
-                  # Random-effects 
-                  (1+time.c|subID), data=data_TIME, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-```
+Specifically, we will add the factor of AIS Grade to our model, as well as interactions between AIS Grade and time.  
 
 After creating this conditional model, we can first check to see if it is an improvement above the unconditional models, by comparing their respective AICs using the anova() function.
 
-```{r}
-anova(raneff_00, raneff_01, raneff_02, oa_mod_01)
-
-```
-
-As this model is an improvement beyond the unconditional models, based on the AIC reducation, we can then delve deeper into the model with the summary() function. 
-
-```{r}
-summary(oa_mod_01)
-```
-
-# 2.1. Modeling Changes in Functional Independence over Months
-Let's take a look at our second data set to remind ourselves how Rasch-Scaled FIM scores changed over time for the our different groups of people with spinal cord injury. 
-```{r, fig.align="center"}
-ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
-  geom_line(aes(group=subID), col="black", alpha=0.8)+
-  geom_point(aes(fill=subID), pch=21, size=2)+
-  facet_wrap(~AIS_grade) +
-  scale_x_continuous(name = "Time (Months)") +
-  scale_y_continuous(name = "Rasch-Scaled FIM") +
-  theme(axis.text=element_text(size=16, color="black"), 
-        axis.title=element_text(size=16, face="bold"),
-        plot.title=element_text(size=16, face="bold", hjust=0.5),
-        strip.text = element_text(size=16, face="bold"),
-        legend.position = "none")
-```
-
-## 2.2. Fitting Unconditional Time Models
-As before, we will start with fitting unconditional models of Time. In this example, Time is in monthsm but to avoid scaling issues when we add our higher order polynomials (e.g., $x^2, x^3$) let's first convert time into years. To show the flexibility in how we code these variables, I will also center time on the first time point so that 0 = the very first point of measurement. Dividing that recentered variable by 12 will give us $year.0$ which codes time, in years, from that very first measurement. We can then create quadratic and cubic versions of the $year.0$ variable. 
-
-```{r}
-
-DAT2$year.0 <- (DAT2$time-1)/12
-DAT2$year.0_sq<-DAT2$year.0^2
-DAT2$year.0_cu<-DAT2$year.0^3
 
 
-# Linear Effect of Time
-time_linear<-lmer(rasch_FIM~
-                # Fixed-effects
-                1+year.0+
-                # Random-effects
-                (1+year.0|subID), data=DAT2, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-summary(time_linear)
-
-
-# Quadratic Effect of Time
-time_square<-lmer(rasch_FIM~
-                    # Fixed-effects
-                    1+year.0+year.0_sq+
-                    # Random-effects
-                    (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                  control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-summary(time_square)
-
-
-# Cubic Effect of Time
-time_cube<-lmer(rasch_FIM~
-                    # Fixed-effects
-                    1+year.0+year.0_sq+year.0_cu+
-                    # Random-effects
-                    (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-summary(time_cube)
-```
-
-In our final model, "time_cube", we get a convergence warning that our model failed to converge with a negative eigen value. The reasons for non-convergence warnings are complicated, but a major contibuter is that our random-effects structure might be too complicated. Let's refit the same model but without the cubic random-effect. Removing this random-effect actually frees up **4** degrees of freedom in our model: the variance of the random-effect and its covariance with the intercept, linear, and quadratic effects. 
-
-```{r}
-# Fixed Cubic Effect of Time
-time_cube<-lmer(rasch_FIM~
-                    # Fixed-effects
-                    1+year.0+year.0_sq+year.0_cu+
-                    # Random-effects
-                    (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-summary(time_cube)
-```
-Removing this random-effect appears to fix our non-convergence problem, so let's retain the model with only a cubic fixed-effect going forward. 
-
-## 2.2.1. Comparison of Unconditional FIM Models
-With our linear, quadratic, and cubic models now in place, we can use the anova() to calculate our AIC's and do a formal model comparison. Looking at the ANOVA table below, you can see that the cubic model yields the lowest AIC, and is thus the model we want to build on moving forward.  
-``` {r}
-anova(time_linear, time_square, time_cube)
-```
-
-
-
-## 2.3. Conditional Curvilinear Models
-Taking our unconditional cubic model as the "base" model, we can now *condition* our model's predictions based on the AIS Grade for each person. The model building strategy you use will likely depend on the context of your research question. For instance, in the previous chapter on experimental designs, we knew that we always wanted to test the fully factorial model from the beginning. In this case, however, I will adopt the strategy of building our models one piece at a time. Adding interactions with the low-level factors first and progressively adding in higher-order interactions. 
 
 ```{r}
 # Effect of AIS Grade on Time
 cond_01<-lmer(rasch_FIM~
                   # Fixed-effects
-                  1+year.0*AIS_grade+year.0_sq+year.0_cu+
+                  1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
                   # Random-effects
-                  (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                  control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
+                  (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE,
+                  control=lmerControl(optimizer="bobyqa",
+                                    optCtrl=list(maxfun=5e5)))
+anova(raneff_03, cond_01)
+```
+
+As this model is an improvement beyond the unconditional models, based on the AIC reduction, we can then delve deeper into the model by passing only the best fitting model to the anova() function, which will give us the omnibus F-test for the different main-effects and interactions (similar to a more traditional ANOVA table). 
+
+```{r}
 anova(cond_01)
-
-
-# Effect of AIS Grade on Quadratic Time
-cond_02<-lmer(rasch_FIM~
-                # Fixed-effects
-                1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu+
-                # Random-effects
-                (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-anova(cond_02)
-
-# Effect of AIS Grade on Cubic Time
-cond_03<-lmer(rasch_FIM~
-                # Fixed-effects
-                1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
-                # Random-effects
-                (1+year.0+year.0_sq|subID), data=DAT2, REML=FALSE,
-                control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
-
-anova(cond_03)
 ```
 
-With our three conditional models in place, we can now use the anova() function to formally compare between models. The AIC is now **increasing** as our models get more complex, indicating that the model with linear interactions between Time and AIS Grade is the most parsimonious explanation of our data. 
+If we really want to drill down into the model, we can get the specific parameters estimates for the fixed-effects (similar to an OLS regression output) and the variance/covariance estimates for the random-effects by using the summary() function.
+
 ```{r}
-# Comparing between Models
-anova(time_cube, cond_01, cond_02, cond_03)
-```
-
-Having selected the best model, I often get questions about which model you should report when writing these results for publication. For instance, should I report "cond_01" because it was the best fitting model? Or should I report "cond_03" to show the higher-order interactions even though we know estimating those parameters increased the AIC (and therefore are unlikely to be statistically interesting). I think there are valid points to made for both approaches and it likely depends on **1)** exaclty what question you are testing and **2)** what is going to be best understood by your audience. 
-
-For instance, if I am testing a hypothesis that strongly predicted a higher-order interaction between AIS_grade and Time, then presenting "cond_03" might make the most sense. That is, even though we know those higher order parameters didn't not explain a lot of variation in our outcomes, it is still interesting to see what the estimates of those effects are. In contrast, if those higher order interactions were very exploratory, it would be reasonable to stop at "cond_01" and only present that model. 
-
-Personally, I like to err on the side of completeness, so I would probably present "cond_03" in the text but report the AIC's for each model, making it clear that "cond_01" was the best fitting model.
-```{r}
-summary(cond_03)
+summary(cond_01)
 ```
 
 # A Note on Optimizers
-One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the Nelder-Mead optimizer, rather than the "Bound Approximation BY Quadratic Approximation" (or *BOBYQA*) optimizer that lme4 uses by defaut. 
+One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the bobyqa optimizer. bobyqa is short for "Bound Approximation BY Quadratic Approximation". It is the optimizer that lme4 uses by default, but I am calling it explicitly here. You can select other optimizers using the lmerControl() function (https://www.rdocumentation.org/packages/lme4/versions/1.1-27/topics/lmerControl). 
 ```{r, eval=FALSE}
 control=lmerControl(optimizer="Nelder_Mead",
-                                    optCtrl=list(maxfun=2e5)))
+                                    optCtrl=list(maxfun=5e5)))
 ```
 
-The reason for this is that non-convergence warnings are much more common in the BOBYQA optimizer relative to other optimizers when our random effects take the form $(1+x_1|Group)$ rather than $(1|Group)$, and when we have fixed-effects on very different scales. As we have models with random slopes and we are using full maximum likelihood estmation, I prefer the Nelder-Mead optimizer for these cases. In my experience I get the same estimates, but with far few non-convergence warnings (only getting those warning when models are truly unstable). 
-
-Now, lme4 will use the BOBYQA optimizer by default, but you can also manually select that optimizer and use it in the models above with the following code:
-
-```{r, eval=FALSE}
-control=lmerControl(optimizer="bobyqa",
-                                    optCtrl=list(maxfun=2e5)))
-```
 A good exercise then is to run all of the models in this chapter using the Nelder-Mead optimizer and the BOBYQA optimizer. Do these models differ in how they estimate the fixed-effects and standard errors of the fixed-effects? Do these models differ in how they estimate the variances and covariances of the random-effects? 
 
+You can also change the number of iterations that your maximum likelihood simulation goes through by changing the maxfun in the optCtrl argument. If you run into convergence warnings, it is a good idea to:
+
+1. increase the number of iterations (use a minimum of 200,000 iterations), 
+2. change your optimizer to see if the problem persists, and finally 
+3. try simplifying the structure of your random-effects.  
+
+
 For a fairly accessible discussion of these issues, I would recommend a simulation study by McCoach and colleagues (2018; https://journals.sagepub.com/doi/abs/10.3102/1076998618776348?journalCode=jebb). By simulating various multi-level data structures and then fitting the same mixed-effects models in different software packages, McCoach and colleagues found that the BOBYQA optimizer tended to give more non-convergence warnings than other optimizers/programs even though the estimates from the models were (effectively) the same.
-
-As such, although there are good reasons that BOBYQA is the default optimizer in lme4, I find that it is unnecessarily sensitive to non-convergence in models with random-slopes. I would welcome feedback from more knowledgeable statisticians on this point, but in my experience switching to the Nelder-Mead optimizer in these situations does not have any noticeable trade-offs in the accuracy of parameter estimation. For complex models, however, the Nelder-Mead optimizer may take longer to run. Thus, for the more modest sized data sets that I work with (tens of thousands of observations), I don't really notice the trade-off in speed and I'd rather not get finicky warnings. If you have properly "big" data however, the speed trade-off might be more a problem and you might need to seek out different solutions (e.g. upping the iterations of the BOBYQA optimizer or selecting a different optimizer altogether). 
-
-
-
 
 ...

@@ -24,9 +24,10 @@ are downloaded we can use the head() function to view the first ten rows of the 
 
 
 ```{r, setting libraries, results="hide", message = FALSE, warning=FALSE}
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest); library(car)
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
+                 stringsAsFactors = TRUE)
 
 ```
 
@@ -84,7 +85,7 @@ the data_COND dataset to average across different trials. First, let's plot the
 data to get a better sense of what the data look like. 
 
 
-``` {r plotting the effects of condition, echo=TRUE}
+``` {r plotting the effects of condition, echo=TRUE, fig.align="center"}
 ggplot(data_COND, aes(x = condition, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
              position=position_jitter(w=0.2, h=0))+
@@ -181,7 +182,7 @@ For this example, we will be analyzing both Time and Condition, so we will use
 our full data frame, *DATA*. First, let's plot the data to get a better 
 sense of what our data look like.
 
-``` {r plotting two repeated measures}
+``` {r plotting two repeated measures, fig.align="center"}
 DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
@@ -189,14 +190,17 @@ ggplot(DATA, aes(x = time, y = speed)) +
              position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
   geom_boxplot(aes(fill=condition), col="black", 
                alpha=0.4, width=0.5, outlier.shape = NA)+
+  labs(fill="Condition")+
   scale_x_discrete(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
+        legend.position = "bottom")
 ``` 
 
 
@@ -281,7 +285,7 @@ summary(mod2)
 
 
 # 3. MER as Mixed-Factorial ANOVA with One Crossed Factor 
-## (2 (Age) x 3 (Condition) ANOVA Example)
+## (2 (Age) x 3 (Condition) ANOVA Example
 For this example, we will now consider both the between-subject factor of age, 
 as well as the within-subject factor of condition. Do to this, we will 
 average over the different trials (1, 2, 3, and 4) to get one observation in each 
@@ -309,21 +313,23 @@ is represented at only one level of that factor (i.e., you are only a younger ad
 However, Condition is a crossed factor, because each person is represented at all levels of Condition 
 (i.e., each person was measured in all three conditions). We can see this more clearly if we plot all of our data.
 
-``` {r plotting crossed and nested factors, warning=FALSE}
+``` {r plotting crossed and nested factors, warning=FALSE, fig.align="center"}
 ggplot(data_COND, aes(x = condition, y = speed)) +
-  geom_point(aes(fill=group), pch=21, size=2,
+  geom_point(aes(fill=age_group), pch=21, size=2,
              position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
-  geom_boxplot(aes(fill=group), col="black",
+  geom_boxplot(aes(fill=age_group), col="black",
                alpha=0.4, width=0.5, outlier.shape=NA)+
-  facet_wrap(~age_group)+
+  labs(fill="Age Group")+
   scale_x_discrete(name = "Condition") +
   scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
+        legend.position = "bottom")
 ``` 
 
 
@@ -397,7 +403,7 @@ Next, we will consider the more complicated example of our fully factorial desig
 with a nested factor of Age-Group, and crossed factors of Condition and
 Time.
 
-``` {r plotting multiple crossed and nested factors}
+``` {r plotting multiple crossed and nested factors, fig.align="center"}
 DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
