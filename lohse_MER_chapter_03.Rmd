@@ -223,6 +223,8 @@ As this model is an improvement beyond the unconditional models, based on the AI
 
 ```{r}
 anova(cond_01)
+#Note that I actually prefer to use the Anova() function from the car package, where you can easily specify the type of SS calculation.
+Anova(cond_01, type="III")
 ```
 
 If we really want to drill down into the model, we can get the specific parameters estimates for the fixed-effects (similar to an OLS regression output) and the variance/covariance estimates for the random-effects by using the summary() function.
