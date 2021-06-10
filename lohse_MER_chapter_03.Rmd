@@ -14,13 +14,14 @@ In our previous dataset, we used the hypothetical cross-sectional study of young
 
 
 ```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car); library(lmerTest)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
                  stringsAsFactors = TRUE)
 
-data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
-data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
+data_TIME <- DATA %>% group_by(subID, time, age_group, group) %>% # Note we ignore condition to average across it
+  summarize(speed = mean(speed, na.rm=TRUE)) %>% # I have included na.rm=TRUE even though there are no missing data
+  arrange(age_group, subID, time)
 ```
 
 ``` {r plotting the effects of time, echo=FALSE, fig.align="center", fig.height = 4, fig.width = 7}
@@ -234,13 +235,13 @@ summary(cond_01)
 ```
 
 # A Note on Optimizers
-One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the bobyqa optimizer. bobyqa is short for "Bound Approximation BY Quadratic Approximation". It is the optimizer that lme4 uses by default, but I am calling it explicitly here. You can select other optimizers using the lmerControl() function (https://www.rdocumentation.org/packages/lme4/versions/1.1-27/topics/lmerControl). 
+One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the bobyqa optimizer. bobyqa is short for "Bound Approximation BY Quadratic Approximation". It is the optimizer that lme4 uses by default, but I am calling it explicitly here. You can select other optimizers using the lmerControl() function: (https://www.rdocumentation.org/packages/lme4/versions/1.1-27/topics/lmerControl). 
 ```{r, eval=FALSE}
 control=lmerControl(optimizer="Nelder_Mead",
                                     optCtrl=list(maxfun=5e5)))
 ```
 
-A good exercise then is to run all of the models in this chapter using the Nelder-Mead optimizer and the BOBYQA optimizer. Do these models differ in how they estimate the fixed-effects and standard errors of the fixed-effects? Do these models differ in how they estimate the variances and covariances of the random-effects? 
+A good exercise is to run all of the models in this chapter using the Nelder-Mead optimizer and the BOBYQA optimizer. Do these models differ in how they estimate the fixed-effects and standard errors of the fixed-effects? Do these models differ in how they estimate the variances and covariances of the random-effects? 
 
 You can also change the number of iterations that your maximum likelihood simulation goes through by changing the maxfun in the optCtrl argument. If you run into convergence warnings, it is a good idea to:
 
