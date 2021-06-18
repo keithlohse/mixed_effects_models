@@ -1,4 +1,4 @@
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car); library(lmerTest)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
                  stringsAsFactors = TRUE)

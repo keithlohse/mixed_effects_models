@@ -1,4 +1,4 @@
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car); library(lmerTest)
 
 DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
                  stringsAsFactors = TRUE)
@@ -153,7 +153,7 @@ ggplot(DATA, aes(x = time, y = speed)) +
 summary(aov(speed ~ age_group*condition*time + Error(subID/(condition*time)), data=DATA))
 
 
-zANOVA(data = DATA, 
+ezANOVA(data = DATA, 
        dv = .(speed),
        wid = .(subID),
        within = .(condition, time),
