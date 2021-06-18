@@ -1,51 +1,52 @@
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(car)
 
-library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
-
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
-
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
+                 stringsAsFactors = TRUE)
 
 head(DATA, 10)
 
-
-data_COND <- aggregate(speed ~ subID + condition + age_group + group, data=DATA, FUN=mean)
-data_COND <- data_COND %>% arrange(subID, age_group, group, condition)
+data_COND <- DATA %>% group_by(subID, condition, age_group, group) %>% # Note we ignore trial to average across it
+  summarize(speed = mean(speed, na.rm=TRUE)) %>% # I have included na.rm=TRUE even though there are no missing data
+  arrange(age_group, subID, condition) # finally, we can resort our data by subIDs within groups
 head(data_COND, 10)
 
-data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
-data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
-head(data_TIME)
+data_TIME <- DATA %>% group_by(subID, time, age_group, group) %>% # Note we ignore condition to average across it
+  summarize(speed = mean(speed, na.rm=TRUE)) %>% # I have included na.rm=TRUE even though there are no missing data
+  arrange(age_group, subID, time) # finally, we can resort our data by subIDs within groups
+head(data_TIME, 10)
 
 ggplot(data_COND, aes(x = condition, y = speed)) +
-       geom_point(aes(fill=condition), pch=21, size=2,
-      position=position_jitter(w=0.2, h=0))+
-     geom_boxplot(aes(fill=condition), col="black", 
-      alpha=0.4, width=0.5)+
-     scale_x_discrete(name = "Condition") +
-     scale_y_continuous(name = "Speed (m/s)") +
-     theme(axis.text=element_text(size=16, color="black"), 
-     axis.title=element_text(size=16, face="bold"),
-     plot.title=element_text(size=16, face="bold", hjust=0.5),
-     panel.grid.minor = element_blank(),
-     strip.text = element_text(size=16, face="bold"),
-     legend.position = "none")
+  geom_point(aes(fill=condition), pch=21, size=2,
+             position=position_jitter(w=0.2, h=0))+
+  geom_boxplot(aes(fill=condition), col="black", 
+               alpha=0.4, width=0.5, outlier.shape = NA)+
+  scale_x_discrete(name = "Condition") +
+  scale_y_continuous(name = "Speed (m/s)") +
+  theme(axis.text=element_text(size=16, color="black"), 
+        axis.title=element_text(size=16, face="bold"),
+        plot.title=element_text(size=16, face="bold", hjust=0.5),
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(size=16, face="bold"),
+        legend.position = "none")
 
 
 summary(aov(speed ~ condition + Error(subID/condition), data=data_COND))
 
 ezANOVA(data = data_COND, 
-      dv = .(speed),
-      wid = .(subID),
-      within = .(condition)
-      )
+        dv = .(speed),
+        wid = .(subID),
+        within = .(condition)
+)
 
+# First we will define our model
 mod1 <- lmer(speed ~ 
-            # Fixed Effects:
-            condition + 
-        # Random Effects: 
-            (1|subID), 
-          # Define the data: 
-        data=data_COND, REML = TRUE)
-                                 
+               # Fixed Effects:
+               condition + 
+               # Random Effects: 
+               (1|subID), 
+             # Define the data: 
+             data=data_COND, REML = TRUE)
+
 # We can then get the ANOVA results for our model:
 anova(mod1)
 
@@ -56,29 +57,26 @@ DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
   geom_point(aes(fill=condition), pch=21, size=2,
-             position=position_jitterdodge(dodge.width = 0.5))+
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
   geom_boxplot(aes(fill=condition), col="black", 
-               alpha=0.4, width=0.5)+
-  scale_x_discrete(name = "Time") +
+               alpha=0.4, width=0.5, outlier.shape = NA)+
+  labs(fill="Condition")+
+  scale_x_discrete(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
-
+        legend.position = "bottom")
 
 DATA$time <- factor(DATA$time)
-
 summary(aov(speed ~ condition*time + Error(subID/(condition*time)), data=DATA))
 
-ezANOVA(data = DATA, 
-    dv = .(speed),
-    wid = .(subID),
-    within = .(time, condition)
-)
-mod1 <- lmer(speed ~ 
+# First we will define our model
+mod2 <- lmer(speed ~ 
                # Fixed Effects:
                time*condition + 
                # Random Effects
@@ -87,94 +85,92 @@ mod1 <- lmer(speed ~
              data=DATA, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod2)
 
-summary(mod1)
-
-
-
-
+summary(mod2)
 
 
 ggplot(data_COND, aes(x = condition, y = speed)) +
-  geom_point(aes(fill=group), pch=21, size=2,
-             position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=group), col="black",
-               alpha=0.4, width=0.5)+
-  facet_wrap(~age_group)+
+  geom_point(aes(fill=age_group), pch=21, size=2,
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
+  geom_boxplot(aes(fill=age_group), col="black",
+               alpha=0.4, width=0.5, outlier.shape=NA)+
+  labs(fill="Age Group")+
   scale_x_discrete(name = "Condition") +
   scale_y_continuous(name = "Speed (m/s)") +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
+        legend.position = "bottom")
 
-summary(aov(speed ~ age_group*group*condition + Error(subID/condition), data=data_COND))
+summary(aov(speed ~ age_group*condition + Error(subID/condition), data=data_COND))
 
 ezANOVA(data = data_COND, 
         dv = .(speed),
         wid = .(subID),
         within = .(condition),
-        between = .(group, age_group)
+        between = .(age_group)
 )
 
-
-
-# First we will define our model
-mod1 <- lmer(speed ~ 
+mod3 <- lmer(speed ~ 
                # Fixed Effects:
-               group*age_group*condition + 
+               age_group*condition + 
                # Random Effects
                (1|subID), 
-               # Define your data, 
+             # Define your data, 
              data=data_COND, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod3)
 
-summary(mod1)
+
+summary(mod3)
 
 DATA$time <- factor(DATA$time)
 
 ggplot(DATA, aes(x = time, y = speed)) +
-  geom_point(aes(fill=group), size=2, shape=21,
-             position=position_jitterdodge(dodge.width = 0.5))+
-  geom_boxplot(aes(fill=group), col="black", 
-               alpha=0.4, width=0.5)+
-  facet_wrap(~condition+age_group)+
-  scale_x_discrete(name = "Time") +
+  geom_point(aes(fill=age_group), size=2, shape=21,
+             position=position_jitterdodge(dodge.width = 0.5, jitter.width = 0.1))+
+  geom_boxplot(aes(fill=age_group), col="black", 
+               alpha=0.4, width=0.5, outlier.shape = NA)+
+  labs(fill="Age Group")+
+  facet_wrap(~condition)+
+  scale_x_discrete(name = "Trial") +
   scale_y_continuous(name = "Speed (m/s)", limits = c(0,3)) +
   theme(axis.text=element_text(size=16, color="black"), 
         axis.title=element_text(size=16, face="bold"),
+        legend.text=element_text(size=16, color="black"), 
+        legend.title=element_text(size=16, face="bold"),
         plot.title=element_text(size=16, face="bold", hjust=0.5),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=16, face="bold"),
-        legend.position = "right")
+        legend.position = "bottom")
 
-summary(aov(speed ~ age_group*group*condition*time + Error(subID/(condition*time)), data=DATA))
+summary(aov(speed ~ age_group*condition*time + Error(subID/(condition*time)), data=DATA))
 
-ezANOVA(data = DATA, 
-    dv = .(speed),
-    wid = .(subID),
-    within = .(condition, time),
-    between = .(group, age_group)
+
+zANOVA(data = DATA, 
+       dv = .(speed),
+       wid = .(subID),
+       within = .(condition, time),
+       between = .(age_group)
 )
 
 # First we will define our model
-mod1 <- lmer(speed ~ 
+mod4 <- lmer(speed ~ 
                # Fixed Effects:
-               group*age_group*condition*time + 
+               age_group*condition*time + 
                # Random Effects
                (1|subID)+(1|condition:subID)+(1|time:subID), 
-               # Define your data, 
+             # Define your data, 
              data=DATA, REML=TRUE)
 
 # We can then get the ANOVA results for our model:
-anova(mod1)
+anova(mod4)
 
-
-summary(mod1)
-
+summary(mod4)
 
