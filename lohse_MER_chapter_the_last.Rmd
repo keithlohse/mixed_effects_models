@@ -29,3 +29,6 @@ both in factorial designs and for truly longitudinal models.
   9. Kuznetsova, A., Brockhoff, P. B., & Christensen, R. H. (2017). lmerTest package: tests in linear mixed effects models. *Journal of statistical software*, 82(13), 1-26.
   
   10. Josh Errickson also has a nice visualization of crossed versus nested variables and how they can be represented as random-effects: https://errickson.net/stats-notes/vizrandomeffects.html 
+  
+  11. Dr. Violet Brown has a great didactic paper on mixed-effects models in psycholinguistics, where both stimuli and subjects are treated as random samples (requiring a doubling of the random-effects stucture when specifying your models): https://journals.sagepub.com/doi/full/10.1177/2515245920960351
+  
