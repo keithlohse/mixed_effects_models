@@ -11,13 +11,13 @@ output:
 Resources for implementing mixed-effects models for different designs.
  
   1. **Section 01** - Introduction to Mixed-Effects Models
-      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_01.html
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html
  
   2. **Section 02** - Mixed-Effect Models for Time Series Data
-      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_03.html
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html
  
   3. **Section 03** - Mixed-Effect Models for Factorial Designs
-      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html
  
   4. **Section 04** - Models with Multiple Sources of Variance 
       * (Coming Soon)
