@@ -1,7 +1,7 @@
 ---
-title: 'Chapter 1: An Introduction to Mixed-Effect Models'
-author: "Keith Lohse, PhD, PStat"
-date: '2021-06-09'
+title: 'Section 1: An Introduction to Mixed-Effect Models'
+author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
+date: '2021-07-07'
 output:
   html_document:
     df_print: paged

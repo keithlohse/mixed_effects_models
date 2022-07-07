@@ -1,29 +1,26 @@
 ---
 title: "Applied Mixed-Effects Regresion for the Clinical Sciences"
-author: "Keith Lohse, PhD, PStat"
-date: "2021-06-09"
+author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
+date: "2022-07-07"
 output:
   html_document:
     df_print: paged
 ---
 
 # Applied Mixed-Effects Regresion for the Clinical Sciences
-Resources for creating mixed-effects models as analogues for ANOVA and for truly longitudinal models.
+Resources for implementing mixed-effects models for different designs.
  
-  1. **Chapter 01** - Introduction to Mixed-Effects Models
+  1. **Section 01** - Introduction to Mixed-Effects Models
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_01.html
  
-  2. **Chapter 02** - Mixed-Effect Models for Factorial Designs
-      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html
- 
-  3. **Chapter 03** - Mixed-Effect Models for Time Series Data
+  2. **Section 02** - Mixed-Effect Models for Time Series Data
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_03.html
  
-  4. **Chapter 04** - Mixed-Effect Models for Time Series within Factorial Designs
+  3. **Section 03** - Mixed-Effect Models for Factorial Designs
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html
+ 
+  4. **Section 04** - Models with Multiple Sources of Variance 
       * (Coming Soon)
   
-  5. **Chapter 05** - Checking Assumptions and Regression Diagnostics
-      * (Coming Soon)
-  
-  6. **Chapter 06** - Further Readings and Recommendations
+  6. **Section n** - Further Readings and Recommendations
       * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)
