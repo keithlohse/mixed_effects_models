@@ -4,7 +4,7 @@
 
 library("ggplot2"); library("lme4"); library("car"); library("dplyr"); library("lmerTest")
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv",
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/random_effects_paper/data_longitudinal.csv",
                  stringsAsFactors = TRUE, na.strings=c("NA","NaN"," ",""))
 # Use the head() function to check the structure of the data file. 
 head(DATA)

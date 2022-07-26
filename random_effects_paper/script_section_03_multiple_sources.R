@@ -5,25 +5,19 @@
 library(lme4); library(lmerTest); library(ez); library(tidyverse)
 
 
-list.files()
-DATA<-read.csv("rt_dummy_data.csv", header = TRUE,
-               stringsAsFactors = TRUE)
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/random_effects_paper/rt_dummy_data.csv",
+                 stringsAsFactors = TRUE, na.strings=c("NA","NaN"," ",""))
+
+head(DATA)
 head(DATA)
 DATA$PID <-factor(DATA$PID)
 
-?xtabs
 xtabs(is.na(RT)==FALSE~stim, data=DATA)
 xtabs(is.na(RT)==FALSE~PID, data=DATA)
 
 summary(DATA$stim)
-unique(DATA$stim)
+length(unique(DATA$stim))
 length(unique(DATA$PID))
-
-STIM_LIST <- c(unique(DATA$stim)[1:10])
-STIM_LIST
-
-DATA$stim %in% STIM_LIST
-
 
 ggplot(data=DATA %>% filter(stim %in% c(unique(DATA$stim)[1:12]) == TRUE),
        aes(x = stim, y = RT)) +
@@ -89,5 +83,29 @@ getME(rand01, "b")
 getME(rand01, "Ztlist")
 vcov.merMod(rand01)
 
+
+# Random Slopes Model ----
+head(DATA)
+rand02 <- lmer(log(RT)~
+                 # Fixed Effects 
+                 1+modality+ 
+                 # Random Effects
+                 (1+modality|PID)+(1|stim),
+               data=DATA, REML=TRUE)
+anova(rand02)
+summary(rand02)
+
+
+fixef(rand02)
+ranef(rand02)
+resid(rand02)
+var(resid(rand02))
+qqnorm(y=rstudent(rand02))
+abline(0,1)
+
+getME(rand02, "mmList")
+getME(rand02, "b")
+getME(rand02, "Ztlist")
+vcov.merMod(rand02)
 
 

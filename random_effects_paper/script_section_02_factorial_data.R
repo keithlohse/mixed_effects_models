@@ -65,8 +65,8 @@ mean(DATA$HR)
 # Repeated Measures ANOVA example ----
 list.files()
 
-DATA<-read.csv("data_heart_rate.csv", header = TRUE,
-               stringsAsFactors = TRUE)
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/random_effects_paper/data_heart_rate.csv",
+                 stringsAsFactors = TRUE, na.strings=c("NA","NaN"," ",""))
 head(DATA)
 
 DATA$Cond <- fct_relevel(DATA$Cond, "rest", "imm", "delay")
