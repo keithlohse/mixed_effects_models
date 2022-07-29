@@ -18,9 +18,10 @@ DATA$year.0 <- (DATA$time -1)/12
 head(DATA)
 ggplot(DATA, aes(x = year.0, y = rasch_FIM)) + 
   geom_line(aes(group=subID)) + 
-  geom_point(aes(fill=as.factor(subID)), pch=21, size=1, stroke=1) + 
+  geom_point(aes(fill=as.factor(subID)), pch=21, size=1.5, stroke=1) + 
+  scale_fill_grey()+
   facet_wrap(~AIS_grade) +
-  scale_x_continuous(name = "Time from Admission (Years)", breaks=c(0,0.5,1,1.5), limits=c(0,1.5)) + 
+  scale_x_continuous(name = "Time from Admission (Years)", breaks=c(0,0.5,1,1.5), limits=c(0,1.6)) + 
   scale_y_continuous(name = "Independence (0-100)",limits=c(0,100)) + 
   theme_bw() + theme(axis.text.x=element_text(size=10, colour="black"),
                      axis.text.y=element_text(size=10, colour="black"), 

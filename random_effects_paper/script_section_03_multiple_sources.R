@@ -58,7 +58,7 @@ summary(DAT2$stim)
 length(unique(DAT2$stim))
 length(unique(DAT2$PID))
 
-ggplot(data=DAT2 %>% filter(stim %in% c(unique(DATA$stim)[1:12]) == TRUE),
+ggplot(data=DAT2 %>% filter(stim %in% c(unique(DAT2$stim)[1:12]) == TRUE),
        aes(x = stim, y = RT)) +
   geom_point(aes(col=stim), shape=16, size=1,
              position = position_jitter(width=0.2))+ 
@@ -79,7 +79,7 @@ ggplot(data=DAT2 %>% filter(stim %in% c(unique(DATA$stim)[1:12]) == TRUE),
         legend.title=element_blank(),
         legend.position = "none")
 
-ggplot(data=DATA %>% filter(PID %in% c(unique(DATA$PID)[1:10]) == TRUE), 
+ggplot(data=DAT2 %>% filter(PID %in% c(unique(DAT2$PID)[1:10]) == TRUE), 
        aes(x = PID, y = RT)) +
   geom_point(aes(col=PID), shape=16, size=1,
              position = position_jitter(width=0.2))+ 
