@@ -15,12 +15,12 @@ DAT1$year.0 <- (DAT1$time -1)/12
 
 ggplot(DAT1, aes(x = year.0, y = rasch_FIM)) + 
   geom_line(aes(group=subID, col=site)) + 
-  geom_point(aes(fill=site), shape=21, size=2) + 
+  geom_point(aes(fill=site), shape=21, size=1.5) + 
   facet_wrap(~AIS_grade) +
   scale_fill_grey()+
   scale_color_grey()+
   labs(col="Site", fill="Site")+
-  scale_x_continuous(name = "Time from Admission (Years)", breaks=c(0,0.5,1,1.5), limits=c(0,1.5)) + 
+  scale_x_continuous(name = "Time from Admission (Years)", breaks=c(0,0.5,1,1.5), limits=c(0,1.6)) + 
   scale_y_continuous(name = "Independence (0-100)",limits=c(0,100)) + 
   theme_bw() + theme(axis.text.x=element_text(size=10, colour="black"),
                      axis.text.y=element_text(size=10, colour="black"), 
@@ -87,7 +87,7 @@ ggplot(data=DATA %>% filter(PID %in% c(unique(DATA$PID)[1:10]) == TRUE),
                outlier.shape = NA) +
   scale_fill_grey()+
   scale_color_grey()+
-  scale_x_discrete(name = "Stimulus") +
+  scale_x_discrete(name = "Subject ID") +
   scale_y_continuous(name = "Response Time") +
   theme_bw()+
   theme(axis.text.x=element_text(size=12, color="black", angle=90), 
