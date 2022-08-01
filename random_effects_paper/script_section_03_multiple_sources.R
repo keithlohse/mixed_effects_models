@@ -31,11 +31,20 @@ ggplot(DAT1, aes(x = year.0, y = rasch_FIM)) +
 
 raneff_quad_site<-lmer(rasch_FIM~ 
                            # Fixed-effects 
-                           1+year.0+I(year.0^2)+ 
+                           1+year.0*AIS_grade +I(year.0^2)*AIS_grade + 
                            # Random-effects 
                            (1+year.0|subID)+(1|site), data=DAT1, REML=FALSE) 
 summary(raneff_quad_site)
 anova(raneff_quad_site)
+
+
+raneff_quad_site_fixed<-lmer(rasch_FIM~ 
+                         # Fixed-effects 
+                         1+year.0*AIS_grade +I(year.0^2)*AIS_grade + site+
+                         # Random-effects 
+                         (1+year.0|subID), data=DAT1, REML=FALSE) 
+summary(raneff_quad_site_fixed)
+anova(raneff_quad_site_fixed)
 
 
 
