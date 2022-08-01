@@ -35,6 +35,7 @@ raneff_quad_site<-lmer(rasch_FIM~
                            # Random-effects 
                            (1+year.0|subID)+(1|site), data=DAT1, REML=FALSE) 
 summary(raneff_quad_site)
+anova(raneff_quad_site)
 
 
 
