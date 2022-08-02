@@ -70,9 +70,9 @@ length(unique(DAT2$PID))
 
 ggplot(data=DAT2 %>% filter(stim %in% c(unique(DAT2$stim)[1:12]) == TRUE),
        aes(x = stim, y = RT)) +
-  geom_point(aes(col=stim), shape=16, size=1,
-             position = position_jitter(width=0.2))+ 
-  geom_boxplot(aes(fill=stim), col="black", alpha=0.2,
+  geom_point(aes(col=modality), shape=16, size=1,
+             position = position_jitterdodge(jitter.width=0.2))+ 
+  geom_boxplot(aes(fill=modality), col="black", alpha=0.2,
                outlier.shape = NA) +
   scale_x_discrete(name = "Stimulus") +
   scale_y_continuous(name = "Response Time") +
@@ -87,13 +87,13 @@ ggplot(data=DAT2 %>% filter(stim %in% c(unique(DAT2$stim)[1:12]) == TRUE),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=12, face="bold"),
         legend.title=element_blank(),
-        legend.position = "none")
+        legend.position = "bottom")
 
 ggplot(data=DAT2 %>% filter(PID %in% c(unique(DAT2$PID)[1:10]) == TRUE), 
        aes(x = PID, y = RT)) +
-  geom_point(aes(col=PID), shape=16, size=1,
-             position = position_jitter(width=0.2))+ 
-  geom_boxplot(aes(fill=PID), col="black", alpha=0.2,
+  geom_point(aes(col=modality), shape=16, size=1,
+             position = position_jitterdodge(jitter.width=0.2))+ 
+  geom_boxplot(aes(fill=modality), col="black", alpha=0.2,
                outlier.shape = NA) +
   scale_fill_grey()+
   scale_color_grey()+
@@ -108,7 +108,7 @@ ggplot(data=DAT2 %>% filter(PID %in% c(unique(DAT2$PID)[1:10]) == TRUE),
         panel.grid.minor = element_blank(),
         strip.text = element_text(size=12, face="bold"),
         legend.title=element_blank(),
-        legend.position = "none")
+        legend.position = "bottom")
 
 
 
@@ -139,26 +139,40 @@ vcov.merMod(rand01)
 
 # Random Slopes Model ----
 head(DAT2)
-rand02 <- lmer(log(RT)~
+rand_slopes <- lmer(log(RT)~
                  # Fixed Effects 
                  1+modality+ 
                  # Random Effects
                  (1+modality|PID)+(1|stim),
                data=DAT2, REML=TRUE)
-anova(rand02)
-summary(rand02)
+anova(rand_slopes)
+summary(rand_slopes)
 
 
-fixef(rand02)
-ranef(rand02)
-resid(rand02)
-var(resid(rand02))
-qqnorm(y=rstudent(rand02))
+fixef(rand_slopes)
+ranef(rand_slopes)
+resid(rand_slopes)
+var(resid(rand_slopes))
+qqnorm(y=rstudent(rand_slopes))
 abline(0,1)
 
-getME(rand02, "mmList")
-getME(rand02, "b")
-getME(rand02, "Ztlist")
-vcov.merMod(rand02)
+getME(rand_slopes, "mmList")
+getME(rand_slopes, "b")
+getME(rand_slopes, "Ztlist")
+vcov.merMod(rand_slopes)
 
 
+
+# Aggregated Model ----
+head(DAT2)
+DAT3 <- DAT2 %>% group_by(PID, modality) %>%
+  summarize(RT = mean(RT))
+
+agg_mod <- lmer(log(RT)~
+                 # Fixed Effects 
+                 1+modality+ 
+                 # Random Effects
+                 (1|PID),
+               data=DAT3, REML=TRUE)
+anova(agg_mod)
+summary(agg_mod)
