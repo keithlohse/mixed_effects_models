@@ -19,7 +19,7 @@ Resources for implementing mixed-effects models for different designs.
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html
  
   4. **Section 04** - Models with Multiple Sources of Variance 
-      * (Coming Soon)
+      * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_multiple_sources.html)
   
   5. **Section n** - Further Readings and Recommendations
       * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)
