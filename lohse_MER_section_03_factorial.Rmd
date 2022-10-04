@@ -1,13 +1,15 @@
 ---
 title: 'Section 3: Mixed-Effects Models for Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
-date: '2022-07-07'
+date: '2022-10-04'
 output:
   html_document:
     df_print: paged
   pdf_document: default
   word_document: default
 ---
+
+## Note that this page is in the process of being updated 2022-10-04
 
 For these examples, we are going to work with a fictional data that that has two 
 fully nested (i.e., between-subjects) and two fully crossed (i.e., within-subject)
@@ -26,7 +28,7 @@ are downloaded we can use the head() function to view the first ten rows of the 
 ```{r, setting libraries, results="hide", message = FALSE, warning=FALSE}
 library(tidyverse); library(RCurl); library(ez); library(lme4); library(car); library(lmerTest)
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv",
                  stringsAsFactors = TRUE)
 
 ```

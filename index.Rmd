@@ -1,13 +1,12 @@
 ---
-title: "Applied Mixed-Effects Regresion for the Clinical Sciences"
+title: "Applied Mixed-Effects Regresion Resources"
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: "2022-07-07"
+date: "2022-10-04"
 output:
   html_document:
     df_print: paged
 ---
 
-# Applied Mixed-Effects Regresion for the Clinical Sciences
 Resources for implementing mixed-effects models for different designs.
  
   1. **Section 01** - Introduction to Mixed-Effects Models
@@ -22,5 +21,5 @@ Resources for implementing mixed-effects models for different designs.
   4. **Section 04** - Models with Multiple Sources of Variance 
       * (Coming Soon)
   
-  6. **Section n** - Further Readings and Recommendations
+  5. **Section n** - Further Readings and Recommendations
       * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)

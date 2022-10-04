@@ -1,0 +1,16 @@
+---
+title: 'Section 4: Mixed-Effects Models with Multiple Sources of Variance'
+author: "Keith Lohse, PhD, PStat"
+date: '2022-10-04'
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+## Note that this page is in the process of being updated 2022-10-04
+
+Coming soon...
+
+

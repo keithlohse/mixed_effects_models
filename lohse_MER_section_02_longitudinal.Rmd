@@ -8,6 +8,8 @@ output:
   pdf_document: default
 ---
 
+## Note that this page is in the process of being updated 2022-10-04
+
 Working with a new data set, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable.  
 
 In our previous data set, we used the hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiety provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at approximately the same time for each person, so there is no between-subject variability in the time variable. 
@@ -16,7 +18,7 @@ In our previous data set, we used the hypothetical cross-sectional study of youn
 ```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
 library(tidyverse); library(RCurl); library(ez); library(lme4); library(car); library(lmerTest)
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv",
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv",
                  stringsAsFactors = TRUE)
 
 data_TIME <- DATA %>% group_by(subID, time, age_group, group) %>% # Note we ignore condition to average across it
@@ -43,7 +45,7 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
 For the new example though, we will use some fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilitation. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 20 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
 
 ```{r, reading in second data, results="hide", message = FALSE, echo=FALSE}
-DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv",
+DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv",
                  stringsAsFactors = TRUE)
 ```
 
@@ -65,13 +67,13 @@ ggplot(DAT2, aes(x = time, y = rasch_FIM)) +
 
 We will explore these data in more detail below. One of the key differences between these models and the factorial models we considered before is that now we will need to deal with **model comparisons**. In the factorial designs, we knew which factors we wanted to include in our model and we always tested the fully factorial design (i.e., all main-effects and interactions). In contrast, for these longitudinal models, we will need to compare different ways to represent time (e.g., linear versus curvilinear models). After we compare models to decide on the best to model time, we can start adding in other variables to explain the differences in individual trajectories. 
 
-In order to do this, we will need to use **Full Maximum-Likelihood** to estimate the different model parameters rather than **Restricted Maximum-Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistically better than another model. I will cover these topics briefly below, but I would direct interested readers to Jeff Longs, *Longitudinal Data Analysis for the Behavioral Science using R* for a more detailed discussion.
+In order to do this, we will need to use **Full Maximum Likelihood** to estimate the different model parameters rather than **Restricted Maximum Likelihood**. Additionally, we will need to decide on a metric for deciding when one model is statistically better than another model. I will cover these topics briefly below, but I would direct interested readers to Jeff Long's, *Longitudinal Data Analysis for the Behavioral Science using R* for a more detailed discussion.
 
 
 # 1. Modeling Changes in Functional Independence over Time
 Starting with modeling changes in functional independence across 18 months of rehabilitation, we can test a series of **unconditional** random-effects models to decide how we want to model the effect of time. These models are said to be "unconditional" because the effect of time does not depend on any other variables. In this series of models, the goal is to establish the best fitting "shape" of our time variable (e.g., should time be linear or quadratic?) and which random-effects are essential to include in the model. 
 
-In these models, I am first going to convert time from months into years in order to avoid any scaling issues in our models. You could also center time around the average time, which I call  *year.c* in the models below ($year_i - \overline{year}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value when Time is 0, to the predicted value on average over time.
+In these models, I am first going to convert time from months into years in order to avoid any scaling issues in our models. You could also center time around the average time, which I call *year.c* in the models below ($year_i - \overline{year}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value when Time is 0, to the predicted value on average over time.
 ```{r}
 # Centering time on the first point and converting to years:
 DAT2$year.0 <- (DAT2$time-1)/12
@@ -234,8 +236,70 @@ If we really want to drill down into the model, we can get the specific paramete
 summary(cond_01)
 ```
 
-# A Note on Optimizers
-One thing you will notice about the lme4 code in this chapter is that I am specifying the optimizer that we are using. Specifically, I am using the bobyqa optimizer. bobyqa is short for "Bound Approximation BY Quadratic Approximation". It is the optimizer that lme4 uses by default, but I am calling it explicitly here. You can select other optimizers using the lmerControl() function: (https://www.rdocumentation.org/packages/lme4/versions/1.1-27/topics/lmerControl). 
+# 2. Fitting a Non-Liner Model of Change over Time
+```{r}
+# Negative Exponential Model ----
+ggplot(DAT2, aes(x = year.0, y = rasch_FIM)) + 
+  geom_line(aes(group=subID), col="grey") + 
+  #stat_smooth(method="lm", formula=y~x+I(x^2), col="black", lwd=1.5, se=FALSE)+
+  scale_x_continuous(name = "Time from Admission (Years)") + 
+  scale_y_continuous(name = "Rasch-Scaled FIM Score (0-100)",limits=c(0,100)) +
+  theme_bw() + 
+  theme(axis.text=element_text(size=14, colour="black"), 
+        axis.title=element_text(size=14,face="bold")) +
+  theme(strip.text.x = element_text(size = 14))+ theme(legend.position="none") 
+
+library(nlme)
+
+set.seed(100)
+neg_exp_rand_mod <- nlme(rasch_FIM ~ b_1i + 
+                           (b_2i)*(exp(b_3i * year.0)),
+                         data = DAT2,
+                         fixed = b_1i + b_2i + b_3i ~ 1,
+                         random = list(b_1i ~ 1, b_2i ~ 1, b_3i ~1),
+                         groups = ~ subID,
+                         start = c(80, -70, -1),
+                         na.action = na.omit)
+summary(neg_exp_rand_mod)
+
+coef(neg_exp_rand_mod)
+fitted(neg_exp_rand_mod)
+
+year <- seq(from=0, to=1.5, by=0.01)
+rasch_FIM <- 58.53985-48.13958*exp(-2.53036*year)
+PRED <- data.frame(year, rasch_FIM)
+
+head(DAT2)
+ggplot(DAT2, aes(x = year.0, y = rasch_FIM)) + 
+  geom_line(aes(group=subID), col="grey") + 
+  scale_x_continuous(name = "Time from Admission (Years)") + 
+  scale_y_continuous(name = "Independence (0-100)",limits=c(0,100)) +
+  #facet_wrap(~AIS_grade) +
+  theme_bw() + 
+  theme(axis.text=element_text(size=14, colour="black"), 
+        axis.title=element_text(size=14,face="bold")) +
+  theme(strip.text.x = element_text(size = 14))+ theme(legend.position="none")+
+  geom_line(data=PRED, aes(x=year, y=rasch_FIM), col="black", lwd=1.5)
+
+
+DAT2$exp_pred <- fitted(neg_exp_rand_mod) # Save model predictions to data frame
+first4<-DAT2[c(1:72),] # Second, we'll make a smaller dataset with the predictions for these 10: 
+
+
+ggplot(first4, aes(x = year.0, y = rasch_FIM)) + 
+  geom_line(aes(group=subID)) + facet_wrap(~subID, ncol=2)+
+  geom_point(fill="grey", pch=21, size=2, stroke=1.25) + 
+  scale_x_continuous(name = "Time from Admission (Years)") + 
+  scale_y_continuous(name = "Independence (0-100)",limits=c(0,100))+
+  geom_line(aes(y=exp_pred), lwd=1, col="purple") +
+  theme_bw() + theme(axis.text=element_text(size=12, colour="black"), 
+                     axis.title=element_text(size=14,face="bold")) +
+  theme(strip.text.x = element_text(size = 12))+ theme(legend.position="none") 
+```
+
+
+# 3. A Note on Optimizers
+Note that I am specifying the optimizer that we are using. Specifically, I am using the bobyqa optimizer. bobyqa is short for "Bound Approximation BY Quadratic Approximation". It is the optimizer that lme4 uses by default, but I am calling it explicitly here. You can select other optimizers using the lmerControl() function: (https://www.rdocumentation.org/packages/lme4/versions/1.1-27/topics/lmerControl). 
 ```{r, eval=FALSE}
 control=lmerControl(optimizer="Nelder_Mead",
                                     optCtrl=list(maxfun=5e5)))
