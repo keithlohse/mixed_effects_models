@@ -11,7 +11,7 @@
 
 <meta name="author" content="Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT" />
 
-<meta name="date" content="2021-07-07" />
+<meta name="date" content="2022-10-04" />
 
 <title>Section 1: An Introduction to Mixed-Effect Models</title>
 
@@ -1637,7 +1637,7 @@ pre code {
 Models</h1>
 <h4 class="author">Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan
 Kozlowksi, PhD, PT</h4>
-<h4 class="date">2021-07-07</h4>
+<h4 class="date">2022-10-04</h4>
 
 </div>
 
@@ -1943,13 +1943,15 @@ designs</strong>: If you truly have time series data (rather than
 categorical repeated measures), then it is important to capture the
 trajectories of your individual subjects. Whether you are measuring time
 on the order seconds, days, or years, this chapter is for you!</p></li>
-<li><p><strong>Mixed-effect regression for time-series within
-factors</strong>: Combining the two chapters above, I will explain how
-you can use mixed-effects to model time-series data within different
-conditions. Do you want to look at trial-by-trial effects under
-different conditions? Maybe you want to measure blood glucose levels
-after your subjects ate vegan cookies and celery (in a counter balanced
-order of course). If so, this chapter is for you.</p></li>
+<li><p><strong>Mixed-effect regression with mulitple sources of
+variance</strong>: Rather than modeling trials over time, perhaps all of
+our trials are categorically different from each other. For instance,
+when learning a motor skill, a learner performs the skill on each trial,
+so it makes sense to model their performance as a function of time. In
+contrast, during language learning, a learner might hear a different
+word on each trial, and therefore I need to account for the fact that I
+have a random sample of words in addition to the fact that I have a
+random sample of subjects.</p></li>
 </ul>
 <p>Finally, I will provide a list of resources that I hope will be
 helpful on your journey deeper into mixed-effects models. These chapters

@@ -1,7 +1,7 @@
 ---
 title: 'Section 1: An Introduction to Mixed-Effect Models'
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: '2021-07-07'
+date: '2022-10-04'
 output:
   html_document:
     df_print: paged
@@ -185,7 +185,7 @@ I know that is a lot, but I hope it helps you find your footing with mixed-effec
 
 * **Mixed-effect regression for longitudinal designs**: If you truly have time series data (rather than categorical repeated measures), then it is important to capture the trajectories of your individual subjects. Whether you are measuring time on the order seconds, days, or years, this chapter is for you!
 
-* **Mixed-effect regression for time-series within factors**: Combining the two chapters above, I will explain how you can use mixed-effects to model time-series data within different conditions. Do you want to look at trial-by-trial effects under different conditions? Maybe you want to measure blood glucose levels after your subjects ate vegan cookies and celery (in a counter balanced order of course). If so, this chapter is for you. 
+* **Mixed-effect regression with mulitple sources of variance**: Rather than modeling trials over time, perhaps all of our trials are categorically different from each other. For instance, when learning a motor skill, a learner performs the skill on each trial, so it makes sense to model their performance as a function of time. In contrast, during language learning, a learner might hear a different word on each trial, and therefore I need to account for the fact that I have a random sample of words in addition to the fact that I have a random sample of subjects. 
 
 Finally, I will provide a list of resources that I hope will be helpful on your journey deeper into mixed-effects models. These chapters provide a foundation, but fall far short of teaching you everything you need/want to know. Fortunately, there are some other great textbooks and online modules that can help you learn.
 
