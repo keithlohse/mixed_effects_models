@@ -1,16 +1,16 @@
 ---
 title: 'Section 2: Mixed-Effects Models for Longitudinal Data'
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: '2021-07-07'
+date: '2022-10-04'
 output:
   html_document:
     df_print: paged
   pdf_document: default
 ---
 
-Working with a new dataset, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable.  
+Working with a new data set, we now want to switch from modeling time as a factor (i.e., treating Trial 1 as categorically different from Trial 2) to treating time as a continuous variable.  
 
-In our previous dataset, we used the hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiety provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at exactly the same time for each person, so there is no between-subject variability in the time variable. 
+In our previous data set, we used the hypothetical cross-sectional study of younger and older adults. Both groups (hypothetically) walked in anxiety provoking conditions (let's say we simulated a virtual alligator behind them) that initially led them to walk faster than they normally would. After repeated exposures however (4 trials), both groups started to walk slower. In this experiment, our time variable is the number of trials. Each trial came at approximately the same time for each person, so there is no between-subject variability in the time variable. 
 
 
 ```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
@@ -40,7 +40,7 @@ ggplot(data_TIME, aes(x = time, y = speed)) +
 ```
 
 
-For the current example though, we will use some new fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilitation. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 20 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
+For the new example though, we will use some fake data that have a structure more like what we might encounter in a longitudinal study. These fake data follow patients with different types of spinal cord injury (given by "AIS Grade") through 18 months of rehabilitation. The outcome is their Rasch-scaled score on the Functional Independence Measure (FIM). Without getting into the weeds of what that means, the values range from 0 to 100, with 100 indicating complete independence in the activities of daily life. Beyond having a lot more observations per person, this dataset also measures time continuously. That is, rather than trials that were all collected at exactly the same time, these data were all collected on different days for different people. Thus, Month 1 as a time point might be Day 20 for some people, but Day 30 for others. One of the strengths of the mixed-effects model is that we can retain this variability in our $X$ variable, by treating time continuously rather than categorically. 
 
 ```{r, reading in second data, results="hide", message = FALSE, echo=FALSE}
 DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/LMER_Clinical_Science/master/ACRM_2018/data/data_session1.csv",
