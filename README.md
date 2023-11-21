@@ -1,5 +1,6 @@
 # mixed_effects_models
  Resources for creating mixed-effcts models as analogues for ANOVA and for truly longitudinal models.
+ <a href="https://zenodo.org/doi/10.5281/zenodo.10173822"><img src="https://zenodo.org/badge/237670474.svg" alt="DOI"></a>
  
  Chapter 01 - Introduction to Mixed-Effects Models
  (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_01.html)
