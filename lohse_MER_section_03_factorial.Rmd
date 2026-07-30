@@ -1,7 +1,7 @@
 ---
 title: 'Section 3: Mixed-Effects Models for Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
-date: '2022-10-04'
+date: "`r Sys.Date()`"
 output:
   html_document:
     df_print: paged
@@ -297,7 +297,7 @@ summary(mod2)
 
 
 # 3. MER as Mixed-Factorial ANOVA with One Crossed Factor 
-## (2 (Age) x 3 (Condition) ANOVA Example
+## 2 (Age) x 3 (Condition) ANOVA Example
 For this example, we will now consider both the between-subject factor of age, 
 as well as the within-subject factor of condition. Do to this, we will 
 average over the different trials (1, 2, 3, and 4) to get one observation in each 
@@ -623,7 +623,7 @@ F(2,62)=0.21. As in Sections 1, 2, and 4, this is a good demonstration that the
 appropriately-specified mixed-effects model is statistically equivalent to the classical
 repeated-measures ANOVA for a complete, balanced, fully-crossed design.
 
-**A general recipe.** Generalizing across Sections 1, 2, and 5: for $k$ fully crossed,
+**A general recipe.** Generalizing across sections: for $k$ fully crossed,
 purely within-subjects factors with no missing cells, you need a random intercept of
 `subject`, plus one random intercept for `subject` crossed with every combination of 1 up
 to $k-1$ of your within-subjects factors. The model's residual then automatically plays

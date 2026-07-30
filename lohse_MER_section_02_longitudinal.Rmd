@@ -1,7 +1,7 @@
 ---
 title: 'Section 2: Mixed-Effects Models for Longitudinal Data'
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: '2026-07-30'
+date: "`r Sys.Date()`"
 output:
   html_document:
     df_print: paged

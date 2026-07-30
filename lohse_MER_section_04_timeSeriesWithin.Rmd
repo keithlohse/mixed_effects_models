@@ -1,14 +1,14 @@
 ---
 title: 'Chapter 4: Mixed-Effect Models for Time Series within Factorial Designs'
 author: "Keith Lohse, PhD, PStat"
-date: "2020-02-20"
+date: "`r Sys.Date()`"
 output:
   html_document:
     df_print: paged
   pdf_document: default
 ---
 
-In this chapter, we are going to combine some of the concepts that we covered in [Chapter 2](https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html), on mixed-factorial designs, with [Chapter 3](https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_03.html), on times series data. In combining these sections, we can see how we would analyze data when we have two time series that come from same person being measured at different times. 
+In this chapter, we are going to combine some of the concepts that we covered in [Section 2](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html), on mixed-factorial designs, with [Section 3](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html), on times series data. In combining these sections, we can see how we would analyze data when we have two time series that come from same person being measured at different times. 
 
 In rehabilitation, for instance we might be interested in the rate at which a person with Parkinson's disease acquires a skill when they are on or off dopamine replacement medication. Alternately, might be interested in hemibody differences between the left and right arms, or left and right legs, over time. 
 
