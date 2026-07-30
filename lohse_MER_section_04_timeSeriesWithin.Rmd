@@ -1,0 +1,100 @@
+---
+title: 'Chapter 4: Mixed-Effect Models for Time Series within Factorial Designs'
+author: "Keith Lohse, PhD, PStat"
+date: "2020-02-20"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+In this chapter, we are going to combine some of the concepts that we covered in [Chapter 2](https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_02.html), on mixed-factorial designs, with [Chapter 3](https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_03.html), on times series data. In combining these sections, we can see how we would analyze data when we have two time series that come from same person being measured at different times. 
+
+In rehabilitation, for instance we might be interested in the rate at which a person with Parkinson's disease acquires a skill when they are on or off dopamine replacement medication. Alternately, might be interested in hemibody differences between the left and right arms, or left and right legs, over time. 
+
+As before however, we will work with our hypothetical dataset in which younger and older adults walked in a virtual environment on four different trials under three different conditions (arbitrary conditions A, B, and C). 
+
+
+```{r, setting libraries, results="hide", message = FALSE, echo=FALSE}
+library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
+
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv")
+# NOTE (2024 revision): previously read from "data_example.csv", which no longer exists
+# in the repository (404). "data_AGING_example.csv" has the same columns and works
+# with all of the code below.
+
+DATA$time.sq <- DATA$time^2
+DATA$time.c <- DATA$time-mean(DATA$time, na.rm=TRUE)
+DATA$time.c.sq <- DATA$time.c^2
+DATA$old.c<-ifelse(DATA$age_group=="YA", 0.5, -0.5)
+# NOTE (2024 revision): the original line here was
+#   DATA$old.c<-(as.numeric(DATA$age_group)-1.5)*(-1)
+# This silently returns old.c = NA for every row under R >= 4.0, because read.csv() no
+# longer defaults to stringsAsFactors=TRUE (that default changed in R 4.0.0, 2020), so
+# age_group is read in as character rather than factor, and as.numeric() on a character
+# vector like "OA"/"YA" returns NA (with a "NAs introduced by coercion" warning) rather
+# than the intended 1/2 factor codes. The explicit ifelse() above is also more
+# transparent pedagogically: it doesn't rely on knowing that R would have alphabetized
+# "OA" before "YA" to land on the intended (-0.5/+0.5) contrast-style coding.
+```
+
+``` {r plotting the effects of time, echo=FALSE, fig.align="center", warning=FALSE, fig.width=9}
+ggplot(DATA, aes(x = time, y = speed)) +
+  geom_line(aes(group=subID), col="grey", alpha=0.8)+
+  geom_point(aes(fill=subID), pch=21, size=2)+
+  stat_smooth(aes(lty=condition, fill=condition), col="black", method="lm", formula=y~poly(x,3), lwd=2)+
+  facet_wrap(~condition, ncol=3) +
+  scale_x_continuous(name = "Trial") +
+  scale_y_continuous(name = "Speed (m/s)") +
+  theme_bw()+
+  theme(axis.text=element_text(size=16, color="black"), 
+        axis.title=element_text(size=16, face="bold"),
+        plot.title=element_text(size=16, face="bold", hjust=0.5),
+        strip.text = element_text(size=16, face="bold"),
+        legend.position = "none")
+  
+```
+
+
+ 
+
+
+
+
+# 1. Modeling Changes in Speed across 4 Trials, in 2 Different Conditions
+To account for the fact that participants were tested under each of the three different conditions, we need a random slope for time *within* condition (rather than only within subject), since each subject's trajectory across trials can differ from one condition to the next.
+
+In these models, we will mean-center time to create a new variable time.c ($time_i - \overline{time}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value on Trial 0 (which does exist) to the predicted value on average over time. (Note that the "average trial" also doesn't exist, but has a more useful interpretation.)  
+
+```{r}
+# Fixed slope random intercepts model ---- 
+mod01<-lmer(speed~ 
+                  # Fixed-effects 
+                  1+time.c*condition+time.c.sq*condition+ 
+                  # Random-effects 
+                  (1|subID)+(1+time.c+time.c.sq|condition:subID),
+                  data=DATA, REML=TRUE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+
+anova(mod01)
+summary(mod01)
+```
+
+## A Note (2024 revision): This Model is Already a Singular Fit
+If you run the model above, you will see a "boundary (singular) fit" warning. Looking at `VarCorr(mod01)` shows why: the estimated correlation between the random linear slope and the random quadratic slope of time (within `condition:subID`) is -1.00 -- an impossible-to-improve-on boundary value, meaning the model is trying to estimate more structure (a full 3x3 variance-covariance matrix, including three separate correlation parameters) than these data can actually support.
+
+This is exactly the kind of situation discussed in Section 3, Part 5.3 of this repository: the "maximal" random-effects structure is not automatically the right choice just because it is more complete on paper. One straightforward alternative is to remove the correlations among the random slopes/intercept using the `||` operator in `lme4`:
+```{r}
+# Zero-correlation alternative ----
+mod01b<-lmer(speed~ 
+                  1+time.c*condition+time.c.sq*condition+ 
+                  (1|subID)+(1+time.c+time.c.sq||condition:subID),
+                  data=DATA, REML=TRUE,
+                control=lmerControl(optimizer="Nelder_Mead",
+                                    optCtrl=list(maxfun=2e5)))
+isSingular(mod01b)
+anova(mod01b)
+```
+This resolves the convergence warning (confirmed: `isSingular(mod01b)` returns `FALSE`) while reaching the same qualitative conclusions about which effects are significant. Removing the correlation parameters assumes that individual differences in the intercept, linear slope, and quadratic slope are independent of one another, which is a real (and testable, via model comparison) assumption -- but it is often a very reasonable one to make when, as here, the fully-correlated model cannot even be estimated without hitting a boundary.
+

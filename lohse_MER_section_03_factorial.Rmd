@@ -78,6 +78,16 @@ situations:
       * When we have multiple crossed factors (i.e., two within-subjects factor) and 
     a single nested factor (i.e., between-subjects factors) in our mixed-effects 
     model.
+  5. **MER as Three-Way Repeated-Measures ANOVA (No Between-Subjects Factor)**
+      * When we have three crossed factors (i.e., three within-subjects factors) and
+    *no* nested, between-subjects factor at all in our mixed-effects model. This
+    situation is a natural extension of Sections 1 and 2 above (which handled one
+    and two crossed factors, respectively) and it is also exactly the situation
+    that Lohse, Kozlowski, and Strube (2023; the companion paper to this repository)
+    describe when they discuss adding a third within-subject factor to a fully
+    factorial design. We work through a fully-verified example below, including
+    what happens when the "textbook correct" random-effects structure runs into
+    trouble.
 
 
 # 1. MER as One-Way Repeated Measures ANOVA 
@@ -495,4 +505,220 @@ and residuals.
 summary(mod4)
 ```
 
+# 5. MER as Three-Way Repeated-Measures ANOVA 
+## (Three Crossed Factors, No Between-Subjects Factor)
+In Sections 1 and 2 above, we built up the mixed-effects analogue of a repeated-measures
+ANOVA one crossed factor at a time (one-way, then two-way). In Sections 3 and 4, we then
+added a *between-subjects* factor (Age Group) alongside one or two *within-subjects*
+factors. But we have not yet pushed the purely within-subjects case (no between-subjects
+factor at all) beyond two crossed factors. This is worth doing for its own sake, because a
+fully within-subjects, three-way design is common in rehabilitation and movement science
+(e.g., every participant experiences every combination of Load x Terrain x Fatigue, or
+every combination of Medication x Time-of-Day x Task), and because it is exactly the
+situation that our companion paper (Lohse, Kozlowski, & Strube, 2023, *Communications in
+Kinesiology*) flags as getting "more complicated" once a third within-subject factor is
+added, but only sketches in a single sentence and footnote. Below, we build out a fully
+worked, numerically-verified example, including a very important complication that shows
+up in real (not just hypothetical) data: what happens when the "textbook correct"
+random-effects structure runs into estimation trouble.
 
+For this example, we simulate a new hypothetical data set (`data_GAIT_3way_example.csv`)
+in which 32 participants walked an obstacle course under every combination of three fully
+crossed within-subject factors:
+
+  * **Load**: carrying a **Light** vs. a **Heavy** pack.
+  * **Terrain**: walking on **Flat** ground, **Uneven** ground, or over **Stairs**.
+  * **Fatigue**: tested **Pre**- vs. **Post**-fatigue protocol.
+
+Every participant is measured exactly once under all $2 \times 3 \times 2 = 12$
+combinations of these factors (384 observations total), and there is no between-subjects
+factor at all (e.g., no separate age or treatment groups). The R script used to simulate
+this data set (`simulate_data_GAIT_3way.R`) is included in the repository alongside the
+data, so that instructors can regenerate it, inspect the true, known effects that were
+simulated, or adapt the script to build their own examples with different numbers of
+factors, levels, or subjects.
+
+```{r, reading in 3way within-subjects data, results="hide", message = FALSE, echo=FALSE}
+DAT3 <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_GAIT_3way_example.csv",
+                 stringsAsFactors = TRUE)
+DAT3$load    <- factor(DAT3$load,    levels = c("Light","Heavy"))
+DAT3$terrain <- factor(DAT3$terrain, levels = c("Flat","Uneven","Stairs"))
+DAT3$fatigue <- factor(DAT3$fatigue, levels = c("Pre","Post"))
+```
+
+```{r plotting 3way within subjects data, fig.align="center", warning=FALSE}
+ggplot(DAT3, aes(x = terrain, y = speed, fill = load)) +
+  geom_boxplot(col="black", alpha=0.6, width=0.6, outlier.shape = NA,
+               position = position_dodge(width=0.7)) +
+  geom_point(pch=21, size=1.5, alpha=0.6,
+             position = position_jitterdodge(dodge.width = 0.7, jitter.width = 0.1)) +
+  facet_wrap(~fatigue) +
+  labs(fill="Load") +
+  scale_x_discrete(name = "Terrain") +
+  scale_y_continuous(name = "Speed (m/s)") +
+  theme(axis.text=element_text(size=14, color="black"), 
+        axis.title=element_text(size=14, face="bold"),
+        legend.text=element_text(size=14, color="black"), 
+        legend.title=element_text(size=14, face="bold"),
+        strip.text = element_text(size=14, face="bold"),
+        panel.grid.minor = element_blank(),
+        legend.position = "bottom")
+```
+
+## 5.1. As an ANOVA...
+Because *every* factor here is within-subjects, we account for the statistical dependence
+of every observation coming from the same person by nesting the *entire* factorial design
+under subject in our `Error()` term:
+```{r three way RM ANOVA the hard way, echo=TRUE, warning=FALSE}
+aov_3way <- aov(speed ~ load*terrain*fatigue + Error(subID/(load*terrain*fatigue)), data=DAT3)
+summary(aov_3way)
+```
+Notice that this single `Error()` call produces **eight** different strata: the (unused,
+since we have no between-subjects factor) `Error: subID` stratum, one stratum for each of
+the three main effects (`subID:load`, `subID:terrain`, `subID:fatigue`), one stratum for
+each of the three two-way interactions (`subID:load:terrain`, `subID:load:fatigue`,
+`subID:terrain:fatigue`), and finally the three-way interaction stratum
+(`subID:load:terrain:fatigue`). Because each subject contributes exactly one observation
+to every cell of the design, this final three-way stratum is also serving as our "leftover"
+residual error -- there is no deeper partition of the data left to make.
+
+## 5.2. Three-Way RM ANOVA as a mixed-effect model...
+To reproduce these eight strata in a single `lmer()` call, we can extend the same logic we
+used for the two-way, purely within-subjects case in Section 2 above. There, to account for
+two crossed factors we needed random intercepts for `subject`, `subject:A`, and `subject:B`,
+and the model's own residual automatically played the role of the finest (`subject:A:B`)
+stratum. For **three** crossed factors, we push that logic one level deeper: we need a
+random intercept for `subject`, one for each **main effect nested in subject**
+(`subject:load`, `subject:terrain`, `subject:fatigue`), and one for each **two-way
+interaction nested in subject** (`subject:load:terrain`, `subject:load:fatigue`,
+`subject:terrain:fatigue`). The model's residual then automatically absorbs the finest,
+three-way stratum (`subject:load:terrain:fatigue`), which is exactly the stratum used to
+test the three-way interaction in the classical ANOVA above.
+
+```{r three way in a mixed effects model, echo=TRUE, warning=FALSE}
+# First we will define our model
+mod5 <- lmer(speed ~ 
+               # Fixed Effects:
+               load*terrain*fatigue + 
+               # Random Effects: one term for subject, one for each factor 
+               # nested in subject, and one for each two-way interaction 
+               # nested in subject:
+               (1|subID) + 
+               (1|subID:load) + (1|subID:terrain) + (1|subID:fatigue) +
+               (1|subID:load:terrain) + (1|subID:load:fatigue) + (1|subID:terrain:fatigue), 
+             data=DAT3, REML=TRUE)
+
+# We can then get the ANOVA results for our model:
+anova(mod5)
+
+# It is always worth checking whether the model actually converged cleanly:
+isSingular(mod5)
+```
+With `isSingular(mod5)` returning `FALSE`, this model converged without hitting a
+boundary, and -- as promised -- every F-value and every denominator degrees of freedom
+matches the classical repeated-measures ANOVA above exactly: Load, F(1,31)=375.52;
+Terrain, F(2,62)=207.06; Fatigue, F(1,31)=122.77; Load x Terrain, F(2,62)=15.76; Load x
+Fatigue, F(1,31)=14.89; Terrain x Fatigue, F(2,62)=0.14; and Load x Terrain x Fatigue,
+F(2,62)=0.21. As in Sections 1, 2, and 4, this is a good demonstration that the
+appropriately-specified mixed-effects model is statistically equivalent to the classical
+repeated-measures ANOVA for a complete, balanced, fully-crossed design.
+
+**A general recipe.** Generalizing across Sections 1, 2, and 5: for $k$ fully crossed,
+purely within-subjects factors with no missing cells, you need a random intercept of
+`subject`, plus one random intercept for `subject` crossed with every combination of 1 up
+to $k-1$ of your within-subjects factors. The model's residual then automatically plays
+the role of the finest, $k$-way stratum. For $k=1$: `(1|subject)`. For $k=2$:
+`(1|subject) + (1|subject:A) + (1|subject:B)`. For $k=3$: the seven-term structure used
+in `mod5` above. Notice how quickly this grows -- a fourth crossed factor would require
+$1 + 4 + 6 = 11$ random-effect terms before the residual even gets involved! This rapid
+growth in complexity is itself an important, practical reason to think carefully before
+adding more and more crossed within-subject factors to a single design (see Section 5.3
+below).
+
+## 5.3. A Note on Boundary (Singular) Fits in Saturated, Three-Way Designs
+The random-effects structure above is the theoretically "correct" one, in the sense that
+it reproduces the classical ANOVA's error strata exactly. But it asks REML to estimate
+*seven* separate variance components from data that, ultimately, come from only 32
+subjects -- and some of those variance components (like `subject:load:fatigue`, which is
+the interaction of two factors that each only have **two** levels) reflect only a single
+contrast per subject. This is a very easy structure to over-ask of your data, and it is
+worth seeing exactly what happens when you do.
+
+To illustrate, let's refit the identical model, but using only the first 12 (of 32)
+subjects from the very same simulated population:
+```{r singular fit demonstration, echo=TRUE, warning=TRUE}
+DAT3_small <- DAT3 %>% filter(subID %in% levels(subID)[1:12]) %>% droplevels()
+
+mod5_small <- lmer(speed ~ 
+                      load*terrain*fatigue + 
+                      (1|subID) + 
+                      (1|subID:load) + (1|subID:terrain) + (1|subID:fatigue) +
+                      (1|subID:load:terrain) + (1|subID:load:fatigue) + (1|subID:terrain:fatigue), 
+                    data=DAT3_small, REML=TRUE)
+
+isSingular(mod5_small)
+VarCorr(mod5_small)
+anova(mod5_small)
+```
+With only 12 subjects, R warns us of a "boundary (singular) fit," and looking at
+`VarCorr(mod5_small)` shows why: the variance estimate for `subID:load` has been pushed
+all the way down to 0.00. Load only has two levels, so `subject:load` reflects a single
+per-subject contrast -- exactly the kind of variance component that is hardest to
+distinguish from residual noise with a modest sample size.
+
+Critically, this is not just a cosmetic warning. Because `subID:load` collapsed into the
+residual, **every fixed effect that depends on that stratum** now uses a different,
+non-integer denominator degrees of freedom, and no longer matches the classical ANOVA
+exactly: Load itself (F=160.32, df=1,21.1, versus the ANOVA's F=188.2, df=1,11), Load x
+Terrain (F=3.08, df=2,26.1, versus the ANOVA's F=2.94, df=2,22 -- note this even flips from
+non-significant to a different p-value), and Load x Fatigue (F=8.93, df=1,17.9, versus the
+ANOVA's F=7.97, df=1,11) have all drifted noticeably from their ANOVA counterparts. Terrain,
+Fatigue, and Terrain x Fatigue -- none of which depended on the collapsed `subID:load` term
+-- still match almost exactly (e.g., Terrain: F=108.75 vs. the ANOVA's 108.7, both with
+df=2,22). The three-way interaction shows only a small drift (F=0.40, df=2,21.6, versus the
+ANOVA's F=0.41, df=2,22), since it is one step further removed from the collapsed term. In
+other words, a singular fit does not just add a scary warning message; in a design like
+this one, it can measurably erode the very ANOVA-equivalence property that was the whole
+reason for building this random-effects structure in the first place, and the terms most
+directly tied to the collapsed variance component are affected the most.
+
+This is precisely the tension that Barr, Levy, Scheepers, & Tily (2013) and Bates, Kliegl,
+Vasishth, & Baayen (2015) debate under the labels "keep it maximal" versus "parsimonious
+mixed models" (the latter, along with a closely related paper by Barr alone, is already in
+the reference list of the companion *Communications in Kinesiology* paper for this
+repository), and that Matuschek, Kliegl, Vasishth, Baayen, & Bates (2017) resolve
+empirically: keeping every theoretically-justified
+random effect can protect against inflated Type I error, but it can also cost real
+statistical power once a variance component is not well-supported by the data, and (as
+shown here) it does not even guarantee the exact ANOVA-equivalence it was meant to
+provide. In practice, we would suggest:
+
+1. **If your design is complete and balanced** (as it is here -- every subject has exactly
+   one observation in every cell, with no missing data), the classical repeated-measures
+   ANOVA (`aov()` or `ezANOVA()`) will always give you the "gold standard" answer directly,
+   without any risk of a singular fit. The main reasons to reach for the mixed-effects
+   version of a fully-crossed, purely within-subjects design are (a) you *do* have some
+   missing data or an unbalanced design, where the classical ANOVA's `Error()` syntax
+   breaks down but `lmer()` still works, or (b) you specifically want to report and
+   interpret the variance components themselves (e.g., "how much do people vary in their
+   Load x Fatigue effect?").
+2. **If you need the mixed-effects version**, consider a more parsimonious structure:
+   dropping the correlations among random effects with the `||` operator, or dropping the
+   specific variance components that are estimated at (or very near) the zero boundary,
+   and refitting. This will not recover the *exact* ANOVA F-values, but it can resolve the
+   convergence warning and typically improves statistical power relative to the maximal
+   model.
+3. **Plan for this ahead of time.** If you know your design will have three or more fully
+   crossed within-subjects factors, simulating data first (as we did to build this section)
+   is a cheap way to check whether your planned sample size can support a maximal
+   random-effects structure at all, before you collect any real data.
+
+
+## References for this Section
+Barr, D. J., Levy, R., Scheepers, C., & Tily, H. J. (2013). Random effects structure for confirmatory hypothesis testing: Keep it maximal. *Journal of Memory and Language, 68*(3), 255-278. https://doi.org/10.1016/j.jml.2012.11.001
+
+Bates, D., Kliegl, R., Vasishth, S., & Baayen, H. (2015). Parsimonious Mixed Models (Version 2). *arXiv*. https://doi.org/10.48550/ARXIV.1506.04967
+
+Lohse, K. R., Kozlowski, A. J., & Strube, M. J. (2023). Model Specification in Mixed-Effects Models: A Focus on Random Effects. *Communications in Kinesiology*. https://doi.org/10.51224/cik.2023.52
+
+Matuschek, H., Kliegl, R., Vasishth, S., Baayen, H., & Bates, D. (2017). Balancing Type I error and power in linear mixed models. *Journal of Memory and Language, 94*, 305-315. https://doi.org/10.1016/j.jml.2017.01.001

@@ -1,7 +1,7 @@
 ---
 title: 'Section 1: An Introduction to Mixed-Effect Models'
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: '2022-10-04'
+date: '2026-07-30'
 output:
   html_document:
     df_print: paged
@@ -17,13 +17,17 @@ $$y_i=\beta_0+\beta_1(Time_i)+\epsilon_i$$
 Each subject's actual score ($y_i$) is the result of an intercept ($\beta_0$) and that constant is modified based on Time (the slope, $\beta_1$ multiplied by the Time variable). The intercept and slope are collectively referred to as our statistical *MODEL*. Our model is not going to be perfect, however, so we need to include an error term ($\epsilon_i$). Good models will have small errors and thus be a better approximation of our *DATA*. As such, we can more generally say that:
 $$Data_i = Model_i + Error_i $$
 
-Mixed-effect regressions are an extension of the general linear model, but they include *random-effects* in addition to the more traditional *fixed-effects* of our models. Theoretical definitions of these effects can pretty intense, but you can think about fixed-effects as variables where all of the levels we are interested are present in the data (e.g., our treatment and control groups are fixed. If someone is interested in other treatments, they need to run another experiment). Random-effects, in contrast, are those variables that reflect variables that we are interested in generalizing outside of a particular study (e.g., if we randomly sample students from different schools, both students and schools could be treated as random-effects, because we want to generalize the results to other students/schools whom we didn't even measure). 
+Mixed-effect regressions are an extension of the general linear model, but they include *random-effects* in addition to the more traditional *fixed-effects* of our models. Theoretical definitions of these effects can pretty intense, but you can think about fixed-effects as variables where all of the levels we are interested are present in the data (e.g., our treatment and control groups are fixed. If someone is interested in other treatments, they need to run another experiment). Random-effects, in contrast, are those variables that reflect variables that we are interested in generalizing outside of a particular study (e.g., if we randomly sample students from different schools, both students and schools could be treated as random-effects, because we want to generalize the results to other students/schools whom we didn't even measure). (**A caveat:** this "do we want to generalize beyond the levels in our data?" heuristic is the most common way to draw the fixed vs. random distinction, and it is consistent with how we use the terms throughout this repository, but it is not the *only* definition in circulation -- Gelman (2005) catalogs five different definitions used across the literature, and our companion paper, Lohse, Kozlowski, & Strube (2023), discusses this explicitly. If you read another textbook and the definition sounds slightly different, that is expected, not a contradiction.)
 
 In practice, I find it helpful to think about the fixed-effects as the variables about which we are testing hypotheses, and the random-effects allow us to account for statistical dependencies in our data, making sure we get the standard errors correct for the calculation of *z*-, *t*-, or *F*-statistics. For instance, consider the following situation:
 ```{r, setting libraries, results="hide", message = FALSE, echo=FALSE, warning=FALSE}
 library(tidyverse); library(RCurl); library(ez); library(lme4); library(lmerTest)
 
-DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_example.csv")
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv")
+# NOTE (2024 revision): this file was previously read from "data_example.csv", which
+# no longer exists in the repository and returns a 404 error. "data_AGING_example.csv"
+# has the identical column structure (subID, group, age_group, condition, time, speed)
+# and is confirmed to work with all of the code below.
 
 data_TIME <- aggregate(speed ~ subID + time + age_group + group, data=DATA, FUN=mean)
 data_TIME <- data_TIME %>% arrange(subID, age_group, group, time)
@@ -162,14 +166,14 @@ RM ANOVA is a perfectly valid method of analysis for a lot of study designs, but
         * However, models can be biased if important time points are missing (e.g., no data where important change occurs). 
         * Models with data that are MNAR can be fit, but models will be biased. For example, an unbalanced data set is one in which later time points are more likely to be missing, which can occur due to drop out, or outcome measurement that is performed during an intervention that varies for individuals. 
 
-* **Data missing on covariates**
+* **Data missing on covariates** (unlike every other row in this table, this is a point of *agreement* between the two methods, not a contrast -- we call that out explicitly here so it doesn't read like a copy-paste error)
     - **RM ANOVA**:
         *	Missing between-person covariate data cannot be accommodated. 
         * Cases are either dropped from analysis or retained by imputing missing values.
 
     - **Mixed-Effects Regression**:
-        *	Missing between-person covariate data cannot be accommodated.  
-        *	Cases are either dropped from analysis or retained by imputing missing values.
+        *	Missing between-person covariate data cannot be accommodated either.  
+        *	As with RM ANOVA, cases are either dropped from analysis or retained by imputing missing values (e.g., via multiple imputation) *before* fitting the mixed-effects model -- the mixed-effects machinery itself does not solve this problem for you.
         
 * **Time-varying covariates**
     - **RM ANOVA**:
@@ -193,3 +197,5 @@ Finally, I will provide a list of resources that I hope will be helpful on your 
 
 # References
 Lohse, K. R., Shen, J., & Kozlowski, A. J. (2020). Modeling Longitudinal Outcomes: A Contrast of Two Methods. Journal of Motor Learning and Development, 8(1), 145-165. doi: https://doi.org/10.1123/jmld.2019-0007
+
+Lohse, K., Kozlowski, A., & Strube, M. J. (2023). Model Specification in Mixed-Effects Models: A Focus on Random Effects. Communications in Kinesiology, 1(5). doi:  https://doi.org/10.51224/cik.2023.52  

@@ -1,7 +1,7 @@
 ---
 title: 'Section 2: Mixed-Effects Models for Longitudinal Data'
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: '2022-10-04'
+date: '2026-07-30'
 output:
   html_document:
     df_print: paged
@@ -152,7 +152,7 @@ $$ Data_i = Model_i + Error_i $$
 
 For instance, you might have noticed that p-values are conspicuously absent from the LME4 output. The reasons for this are complicated, but it has to do with the fact that these models can have statistical dependencies and unbalanced/missing data that do not make the calculation of traditional p-values tenable. In short, your denominator degrees of freedom can get a little crazy. (You can also read an explanation from Doug Bates, a main author of the lme4 package, here: https://stat.ethz.ch/pipermail/r-help/2006-May/094765.html). However, the key things that you should know are:
 
-1. If you really, really want p-values for individual parameters, you can get them from packages that implement the Welch-Satterthwaite approximation to estimate the appropriate degrees of freedom, like the "lmerTest"" package.
+1. If you really, really want p-values for individual parameters, you can get them from packages that implement the Satterthwaite approximation or Kenward-Roger approximation to degrees of freedom, like the "lmerTest"" package.
 
 2. We are most interested in comparisons between models and less so the individual parameters within a model. All of our models were fit using Full Maximum Likelihood Estimation and we judge models based on a reduction in ERROR that we call Deviance. Fortunately, there are several quantitative and objective methods for evaluating the change in deviance. We will focus on two of these methods, the Wald Test for the change in Deviance and the Akaike Information Criterion (AIC).
 
@@ -224,9 +224,22 @@ anova(raneff_03, cond_01)
 
 As this model is an improvement beyond the unconditional models, based on the AIC reduction, we can then delve deeper into the model by passing only the best fitting model to the anova() function, which will give us the omnibus F-test for the different main-effects and interactions (similar to a more traditional ANOVA table). 
 
+Note if we want to control the type of deviance we calculate, can control that using Anova() function from the car package:
+
+* Type I = sequential (terms are tested in the order they appear in the model)
+
+* Type II = marginal effects (deviance is always assigned to main effect before interactions)
+
+* Type III = parallel (deviance is estimated in parallel, i.e., each term is "controlling for" all other terms in the model
+
+However, not that the Anova() function uses chi-squared tests, not F-tests these are different test statistics and while they generally yield similar conclusions, they will not necessarily yield the same conclusions.
+
 ```{r}
 anova(cond_01)
-#Note that I actually prefer to use the Anova() function from the car package, where you can easily specify the type of SS calculation.
+# Compare to Anova output
+# Type II - marginal
+Anova(cond_01, type="II")
+# Type III - parallel
 Anova(cond_01, type="III")
 ```
 
@@ -317,3 +330,8 @@ You can also change the number of iterations that your maximum likelihood simula
 For a fairly accessible discussion of these issues, I would recommend a simulation study by McCoach and colleagues (2018; https://journals.sagepub.com/doi/abs/10.3102/1076998618776348?journalCode=jebb). By simulating various multi-level data structures and then fitting the same mixed-effects models in different software packages, McCoach and colleagues found that the BOBYQA optimizer tended to give more non-convergence warnings than other optimizers/programs even though the estimates from the models were (effectively) the same.
 
 ...
+
+# References
+Lohse, K., Kozlowski, A., & Strube, M. J. (2023). Model Specification in Mixed-Effects Models: A Focus on Random Effects. Communications in Kinesiology, 1(5). doi:  https://doi.org/10.51224/cik.2023.52  
+
+McCoach, D. B., Rifenbark, G. G., Newton, S. D., Li, X., Kooken, J., Yomtov, D., ... & Bellara, A. (2018). Does the package matter? A comparison of five common multilevel modeling software packages. Journal of Educational and Behavioral Statistics, 43(5), 594-627. https://doi.org/10.3102/1076998618776348 
