@@ -232,7 +232,7 @@ Note if we want to control the type of deviance we calculate, can control that u
 
 * Type III = parallel (deviance is estimated in parallel, i.e., each term is "controlling for" all other terms in the model
 
-However, not that the Anova() function uses chi-squared tests, not F-tests these are different test statistics and while they generally yield similar conclusions, they will not necessarily yield the same conclusions.
+However, note that the Anova() function uses chi-squared tests by default, not F-tests. These are different test statistics and while they generally yield similar conclusions, they will not necessarily yield the same conclusions.
 
 ```{r}
 anova(cond_01)

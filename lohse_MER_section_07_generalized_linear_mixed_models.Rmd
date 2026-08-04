@@ -1,0 +1,259 @@
+---
+title: 'Section 7: Generalized Linear Mixed Models (GLMMs) for Non-Normal Data'
+author: "Keith Lohse, PhD, PStat"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Every outcome we have modeled so far in this repository -- gait speed, functional
+independence, response time -- has been a continuous measure that we were comfortable treating
+as approximately normally distributed. Not every outcome in rehabilitation or movement science
+looks like that. Did the participant fall or not (binary)? How many falls did they have in a
+month (a count)? What proportion of trials did they complete successfully (a proportion)? For
+outcomes like these, a standard linear mixed model (LMM) runs into three related problems:
+
+1. The residuals are structurally non-normal (a binary outcome can only have two possible
+   residual values at any given predicted probability).
+2. The variance of the outcome is mathematically tied to its mean (for a binomial outcome,
+   $\text{Var}(Y) = np(1-p)$; for a Poisson-distributed count, $\text{Var}(Y) = \mu$), so
+   "homogeneity of variance" isn't a reasonable assumption.
+3. A linear model's predictions are unbounded, so it will happily predict a probability of
+   1.3 or a count of $-4$, both of which are impossible. Certainly we might allow for some 
+   flexibility here - "interval-like" data - but at a certain point we are better served
+   by changing gears and adopting a new model. 
+
+**Generalized Linear Mixed Models (GLMMs)** solve all three problems the same way a standard
+generalized linear model (GLM) does: by combining a **link function** $g(\cdot)$ 
+that maps the (bounded) mean of the outcome onto an (unbounded) linear predictor, 
+with a probability distribution from the exponential family whose variance is 
+allowed to depend on its mean in whatever way that distribution requires:
+$$g(\mu_{ij}) = \mathbf{X}_{ij} \boldsymbol{\beta} + \mathbf{Z}_{ij} \mathbf{b}_i$$
+where $\mu_{ij} = \mathbb{E}[Y_{ij} \mid \mathbf{b}_i]$ is the conditional mean given the
+random effects. Everything you already know about specifying fixed and random effects from
+Sections 1-4 carries over unchanged; what's new is the choice of link function and
+distribution family.
+
+## 7.1. Why `glmmTMB` Instead of `lme4::glmer`?
+
+`lme4::glmer()` is a perfectly good tool for standard binomial and Poisson GLMMs, and if that
+is all you need, there is no reason to add another package to your workflow. We use
+`glmmTMB` in this section because rehabilitation and clinical outcome data very often need
+three things `glmer()` doesn't provide:
+
+* **Overdispersion-aware count families**: native negative binomial distributions
+  (`nbinom1` and `nbinom2`), for count data whose variance grows faster than its mean --
+  which happen for things like symptom counts, fall counts, or hospital visits.
+* **Zero inflation**: a separate model (`ziformula = ~ ...`) for "structural" zeros that
+  arise from a different process than the count process itself (e.g., athletes who missed 0 days
+  due to injury are probably those that *never got injured*, so 0 versus 1 is a *qualitative* difference,
+  whereas 1 versus 2 is a quantitative difference).
+* **Modeling the dispersion itself**: `dispformula = ~ ...` lets the residual variance change
+  systematically across groups or covariates, similar in spirit to the `varIdent()` structures
+  we saw for continuous outcomes in Section 6.
+
+`glmmTMB` is built on Template Model Builder (C++ with automatic differentiation), which also
+tends to make it faster than `glmer()` for complex random-effects structures, though for the
+simple examples in this section speed is not the deciding factor.
+
+---
+
+## 2. Example 1: A Binary Logistic GLMM
+
+Consider a hypothetical between-subjects experiment: 40 participants were randomized to
+either a Control or a Treatment condition, and each participant completed 20 trials of a
+task, with a binary success/failure outcome on each trial.
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(glmmTMB)
+library(emmeans)
+library(performance)
+```
+
+```{r simulate-binary-data}
+set.seed(101)
+n_sub <- 40
+n_trials <- 20
+
+df_bin <- expand.grid(
+  subID = factor(1:n_sub),
+  trial = 1:n_trials
+) %>%
+  mutate(
+    condition = factor(if_else(as.numeric(subID) <= n_sub / 2, "Control", "Treatment"))
+  )
+
+sub_intercepts_logit <- rnorm(n_sub, mean = 0, sd = 1.2)
+
+df_bin <- df_bin %>%
+  mutate(
+    logit_p = -0.5 + 1.2 * (condition == "Treatment") + sub_intercepts_logit[subID],
+    prob    = 1 / (1 + exp(-logit_p)),
+    success = rbinom(n(), size = 1, prob = prob)
+  )
+```
+
+```{r fit-binary-glmm}
+mod_bin_tmb <- glmmTMB(
+  success ~ condition + (1 | subID),
+  data   = df_bin,
+  family = binomial(link = "logit")
+)
+
+summary(mod_bin_tmb)
+```
+
+The fixed-effect coefficients here are on the **logit (log-odds) scale**, which is not a
+natural scale for most readers to interpret directly. Just as we used `emmeans` in Section 5
+to get model-implied means rather than raw coefficients, we can ask `emmeans` to
+back-transform these estimates onto the probability scale:
+
+```{r emm-binary}
+emm_bin <- emmeans(mod_bin_tmb, ~ condition, type = "response")
+emm_bin
+```
+
+## 7.3. Example 2: Count Data -- Poisson, Negative Binomial, and Zero-Inflation
+
+Count outcomes bring a second, distinct problem: **overdispersion**. A Poisson distribution
+assumes the variance exactly equals the mean, but many real count outcomes (symptom counts,
+number of falls, number of relapses) are considerably more variable than that. On top of
+overdispersion, clinical count data often has an excess of "structural" zeros -- patients for
+whom the count is always going to be zero, for reasons unrelated to the count process for
+everyone else.
+
+```{r simulate-count-data}
+set.seed(2026)
+n_pts <- 50
+n_obs <- 6
+
+df_count <- expand.grid(
+  patientID = factor(1:n_pts),
+  visit     = 1:n_obs
+) %>%
+  mutate(
+    # As above: assigning group by patientID (not by row) keeps this a genuine
+    # between-subjects factor, with every patient in one arm for all of their visits.
+    group = factor(if_else(as.numeric(patientID) <= n_pts / 2, "Placebo", "Active"))
+  )
+
+# Simulate overdispersed counts (via a negative binomial generating process) with an
+# additional 30% chance of a "structural" zero layered on top.
+p_zero <- 0.30
+df_count <- df_count %>%
+  mutate(
+    is_structural_zero = rbinom(n(), 1, p_zero),
+    lambda = exp(1.5 - 0.4 * visit + 0.6 * (group == "Active") + rnorm(n_pts, 0, 0.4)[patientID]),
+    raw_count = rnbinom(n(), size = 1.5, mu = lambda),
+    symptom_count = if_else(is_structural_zero == 1, 0L, raw_count)
+  )
+```
+
+### 7.3.1 Start Simple, and Let Diagnostics Tell You When To Upgrade
+
+It's tempting to jump straight to the most flexible model (negative binomial with zero
+inflation), but a more feasible workflow is to start with the simplest plausible model, check
+whether it's adequate, and only add complexity where the diagnostics say you need it:
+
+```{r fit-poisson}
+mod_poisson <- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  data   = df_count,
+  family = poisson(link = "log")
+)
+
+check_overdispersion(mod_poisson)
+```
+
+The Poisson model's own diagnostic tells us clearly that we have a problem: a dispersion
+ratio well above 1 means the data are considerably more variable than a Poisson distribution
+allows for, and the test is significant. This is exactly the situation `nbinom2` was built
+for, since the negative binomial's variance function ($\text{Var}(Y) = \mu + \mu^2/\theta$)
+includes a free parameter ($\theta$) to absorb exactly this kind of extra variability:
+
+```{r fit-negbin}
+mod_negbin <- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  data   = df_count,
+  family = nbinom2(link = "log")
+)
+
+check_overdispersion(mod_negbin)
+```
+
+Once we let the model estimate its own dispersion parameter, the overdispersion problem
+disappears -- which is reassuring, but is also exactly what we should expect, since the
+negative binomial model now has the flexibility to match however much extra variance the data
+actually contain. Finally, we can add a zero-inflation component to explicitly model the
+excess structural zeros:
+
+```{r fit-zinb}
+mod_zinb <- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  ziformula = ~ 1,  # a single, constant zero-inflation probability across all observations
+  data      = df_count,
+  family    = nbinom2(link = "log")
+)
+```
+
+### 7.3.2 Comparing the Three Models
+
+```{r compare-count-models}
+anova(mod_poisson, mod_negbin, mod_zinb)
+```
+
+**A caveat on this comparison.** Formally, a likelihood-ratio test assumes the simpler model
+is nested inside the more complex one *and* that the parameter being added is not sitting on
+the boundary of its allowed range under the null hypothesis. Both comparisons here bend that
+assumption a little: the Poisson-to-negative-binomial step is really testing whether the
+negative binomial's dispersion parameter is at its (boundary) limiting value where the
+negative binomial reduces to a Poisson distribution, and the negative-binomial-to-ZINB step is
+testing whether a probability parameter is at the boundary value of 0. In both cases, the
+$\chi^2$ p-value from a standard LRT is a commonly-used approximation rather than an exact
+test -- the same general caveat about testing variance components at a boundary that came up
+for singular fits in Section 3.5.3 of this repository. In practice, most applied
+researchers still use these comparisons as a practical, ordered guide (do I need overdispersion?
+do I need zero-inflation on top of that?) alongside AIC, rather than treating the p-values as
+exact.
+
+### 7.3.3 Marginal Predictions on the Response Scale
+
+Just as we back-transformed the binary model's predictions above, we can ask for the
+zero-inflated model's predicted symptom counts on their natural (response) scale, broken out
+by group and visit:
+
+```{r emm-count, message=FALSE}
+emmeans(mod_zinb, ~ group | visit, at = list(visit = 1:6), type = "response")
+```
+
+Note the `at = list(visit = 1:6)`. Because `visit` is a *continuous* predictor in this model
+(not a factor), asking for `~ group | visit` without also specifying `at` will only evaluate
+the model at `visit`'s mean (here, 3.5) rather than at each actual visit -- giving you one
+combined estimate rather than the visit-by-visit trajectory you're probably after. Whenever
+you condition on (`|`) a continuous variable, decide explicitly which values of it you want
+predictions at.
+
+## Summary
+
+* GLMMs extend everything you already know about specifying fixed and random effects to
+  outcomes that are binary, count, or otherwise non-normally distributed, via a link function
+  and an appropriate probability family.
+* `glmmTMB` adds negative-binomial, zero-inflated, and dispersion-modeling options on top of
+  what `lme4::glmer()` already provides.
+* * Check overdispersion on your *simplest* candidate model first; it is the diagnostic that
+  tells you whether you need to move from Poisson to negative binomial in the first place,
+  not just a box to check after the fact on your final model.
+* Likelihood-ratio tests that compare different families, or that test a parameter sitting at
+  a boundary value (e.g., "is there any zero-inflation at all?"), should be treated as useful
+  approximations rather than exact tests.
+
+## References
+Brooks, M. E., Kristensen, K., van Benthem, K. J., Magnusson, A., Berg, C. W., Nielsen, A.,
+Skaug, H. J., Maechler, M., & Bolker, B. M. (2017). glmmTMB Balances Speed and Flexibility
+Among Packages for Zero-inflated Generalized Linear Mixed Modeling. *The R Journal, 9*(2),
+378-400. https://doi.org/10.32614/RJ-2017-066
+
+Agresti, A. (2015). *Foundations of Linear and Generalized Linear Models*. Wiley.

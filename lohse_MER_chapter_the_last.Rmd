@@ -31,4 +31,17 @@ both in factorial designs and for truly longitudinal models.
   10. Josh Errickson also has a nice visualization of crossed versus nested variables and how they can be represented as random-effects: https://errickson.net/stats-notes/vizrandomeffects.html 
   
   11. Dr. Violet Brown has a great didactic paper on mixed-effects models in psycholinguistics, where both stimuli and subjects are treated as random samples (requiring a doubling of the random-effects stucture when specifying your models): https://journals.sagepub.com/doi/full/10.1177/2515245920960351
-  
+
+The readings above were compiled for the original four sections of this repository. As we've
+expanded into Sections 5-9, a few additional resources specific to those newer topics are
+listed below.
+
+  12. Lenth, R. V. (2016). Least-Squares Means: The R Package lsmeans. *Journal of Statistical Software*, 69(1), 1-33. (companion resource for Section 5's coverage of `emmeans`)
+
+  13. Verbeke, G., & Molenberghs, G. (2000). *Linear Mixed Models for Longitudinal Data.* Springer-Verlag. (a deeper treatment of the residual covariance structures covered in Section 6)
+
+  14. Brooks, M. E., Kristensen, K., van Benthem, K. J., Magnusson, A., Berg, C. W., Nielsen, A., Skaug, H. J., Maechler, M., & Bolker, B. M. (2017). glmmTMB balances speed and flexibility among packages for zero-inflated generalized linear mixed modeling. *The R Journal*, 9(2), 378-400. (the package used for Section 7's GLMMs)
+
+  15. Clark, H. H. (1973). The language-as-fixed-effect fallacy: A critique of language statistics in psychological research. *Journal of Verbal Learning and Verbal Behavior*, 12(4), 335-359. (the foundational paper behind Section 8's discussion of crossed random effects)
+
+  16. Lüdecke, D., Ben-Shachar, M. S., Patil, I., Waggoner, P., & Makowski, D. (2021). performance: An R package for assessment, comparison and testing of statistical models. *Journal of Open Source Software*, 6(60), 3139. (the package introduced in Section 9 for model diagnostics)

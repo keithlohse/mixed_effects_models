@@ -1,0 +1,466 @@
+---
+title: 'Section 6: Modeling Autocorrelation and Heteroscedasticity with `nlme`'
+author: "Keith Lohse, PhD, PStat"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Every model we have fit with `lme4::lmer()` so far in this repository makes one assumption
+that we have never actually stated out loud - although it was implicit in Section 1's very first equation.
+
+Recall the general form of a mixed-effects model from Section 1 (Equation 1 of the companion
+paper):
+$$\mathbf{y} = \mathbf{X}\boldsymbol{\beta} + \mathbf{Z}\boldsymbol{\gamma} + \boldsymbol{\epsilon}$$
+where $\mathbf{y}$ is the vector of every observation across every subject, $\mathbf{X}\boldsymbol{\beta}$
+is the fixed-effects part of the model, $\mathbf{Z}\boldsymbol{\gamma}$ is the random-effects
+part, and $\boldsymbol{\epsilon}$ is the vector of leftover residuals.
+
+To talk about correlation *within* a subject over time, it helps to zoom in on one subject at a
+time -- restricting Equation 1 to just subject $i$'s own rows:
+$$\mathbf{y}_i = \mathbf{X}_i\boldsymbol{\beta} + \mathbf{Z}_i\boldsymbol{\gamma}_i + \boldsymbol{\epsilon}_i$$
+This is not a new model. It is the exact same equation, just written one subject's block of
+rows at a time -- the same partitioning that Figure 2 of the companion paper shows $\mathbf{Z}$
+performing when it "spreads out" the random effects, $\boldsymbol{\gamma}$, into a share for
+each subject.
+
+As we've previously discussed, every time we've written out a set of random effects (e.g.,
+Section 2's random-slopes model), that subject $i$'s own vector of random deviates follows a
+multivariate normal distribution -- for instance, for a random intercept and random slope:
+$$\begin{bmatrix}\gamma_{0i}\\ \gamma_{1i}\end{bmatrix} \sim \mathcal{N}\left(\begin{bmatrix}0\\0\end{bmatrix}, \begin{bmatrix}\sigma_0^2 & \sigma_{01}\\ \sigma_{01} & \sigma_1^2\end{bmatrix}\right)$$
+We will now give that covariance matrix a name, $\mathbf{G}$, so that $\boldsymbol{\gamma}_i
+\sim \mathcal{N}(\mathbf{0}, \mathbf{G})$. Nothing about $\mathbf{G}$ is new here - it is the
+same matrix you have already been building throughout Sections 1-4, just represented by a single
+letter instead of spelled out in full every time.
+
+What every model so far *has* quietly assumed, without ever writing it down this explicitly,
+is the analogous statement for the residuals: $\boldsymbol{\epsilon}_i \sim
+\mathcal{N}(\mathbf{0}, \sigma^2\mathbf{I})$ - every residual for subject $i$ has the same
+variance $\sigma^2$, and none of them correlate with one another. We can give this residual covariance
+matrix a name too, $\mathbf{R}_i$, so that $\boldsymbol{\epsilon}_i \sim \mathcal{N}(\mathbf{0},
+\mathbf{R}_i)$. Up until now, $\mathbf{R}_i$ has simply *been* $\sigma^2\mathbf{I}$, we just
+never called it that.
+
+Once both matrices have names, the total variance of subject $i$'s outcomes follows directly.
+$\mathbf{X}_i\boldsymbol{\beta}$ is a fixed quantity, not a random one, so it contributes
+nothing to the variance; and because $\boldsymbol{\gamma}_i$ and $\boldsymbol{\epsilon}_i$ are
+assumed independent of one another,
+$$\text{Var}(\mathbf{y}_i) = \text{Var}(\mathbf{Z}_i\boldsymbol{\gamma}_i + \boldsymbol{\epsilon}_i)
+= \mathbf{Z}_i\,\text{Var}(\boldsymbol{\gamma}_i)\,\mathbf{Z}_i^T + \text{Var}(\boldsymbol{\epsilon}_i)
+= \mathbf{Z}_i \mathbf{G} \mathbf{Z}_i^T + \mathbf{R}_i$$
+
+Thus far, we have principally discussed how to deal with statistical dependence through what is called the **"G-side"** matrix; 
+that is, the specification of the **random effects**. However, especially when we have repeated
+observations at the lowest level of our data, we might also need to worry about the **"R-side"** matrix; that is, 
+are there additional considerations we need to make about the (co)variance of our **residuals** above and beyond our random effects.
+Every model in Sections 1-4 fixed $\mathbf{R}_i = \sigma^2\mathbf{I}$ and let $\mathbf{G}$ do all of the work of 
+describing dependency within a subject. `lme4` doesn't give you a way to change this -
+$\mathbf{R}_i = \sigma^2\mathbf{I}$ is baked into how the package is built, which is part of
+why it is so fast even for complicated crossed random-effects structures (Section 8). Critically, 
+if we have specified our random effects structure sufficiently, this is also a very reasonable 
+assumption. However, treating $\mathbf{R}_i$ as a plain $\sigma^2\mathbf{I}$ may not always 
+be sufficient. Specifically, there are two properties of our residuals that we need to 
+concern ourselves with:
+
+1. **Autocorrelation.** Observations closer together in time, from the same subject, tend to
+   be *more* similar to each other than observations further apart. A person having an
+   unusually good day at Week 3 is a better predictor of Week 4 than of Week 40.
+2. **Heteroscedasticity.** The variance of the residuals can change systematically over time,
+   across conditions, or across groups -- e.g., people's scores might be tightly clustered
+   right after admission and much more spread out a year later, as some people have
+   recovered fully and others have not.
+
+The `nlme` package (which we already used for the negative-exponential growth model in
+Section 2) lets us model both of these directly, by specifying an explicit structure for
+$\mathbf{R}_i$ -- on top of whatever $\mathbf{G}$ we've already chosen for the random effects --
+instead of accepting the default $\sigma^2\mathbf{I}$.
+
+
+## 6.1. Common Residual Covariance Structures
+
+* **Compound Symmetry (`corCompSymm`)**: a single correlation $\rho$ between *any* two time
+  points from the same subject, regardless of how far apart they are. This is the same
+  assumption implicit in a repeated-measures ANOVA when sphericity holds (see Section 3; 
+  a random-intercept-only mixed model is mathematically equivalent to compound
+  symmetry.
+* **Autoregressive Order 1 (`corAR1`)**: correlation decays geometrically with each discrete
+  time step, $\text{Corr}(\epsilon_t, \epsilon_{t+k}) = \rho^{|k|}$. This is a natural choice
+  when your time points are evenly spaced (Trial 1, 2, 3, 4...) and you expect the
+  "good day/bad day" carryover to fade steadily rather than staying constant.
+* **Continuous AR1 (`corCAR1`)**: the same idea as `corAR1`, but for *continuously* and (potentially)
+  *irregularly* spaced time -- exactly the situation we described in Section 2, where our
+  spinal-cord-injury data were "collected on different days for different people," so that
+  Month 3 for one participant might really be Day 85 and for another Day 95.
+* **Unstructured (`corSymm`)**: no assumed pattern at all -- every pair of time points gets
+  its own, freely-estimated correlation. This is the most flexible option but also the most
+  informationally "expensive": with $T$ time points it estimates $T(T-1)/2$ separate correlation parameters,
+  which can quickly become more than your data can support.
+
+---
+
+## 6.2. A Simulated Example: Recovering a Known AR(1) Process
+
+To see these ideas clearly, we will first simulate data where we know the true answer: 30
+subjects, measured at 6 evenly-spaced time points, with residuals that (a) truly follow an
+AR(1) process with $\rho = 0.65$ and (b) truly grow more variable over time.
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(nlme)
+```
+
+```{r simulate-ar1-data}
+set.seed(2026)
+n_subjects <- 30
+n_timepoints <- 6
+
+df_nlme <- expand.grid(
+  subID = factor(1:n_subjects),
+  time  = 1:n_timepoints
+) %>%
+  arrange(subID, time)
+
+sigma_base <- 1.0 # baseline variance
+rho_true <- 0.65 # true correlation
+
+# Build each subject's residual trajectory in two steps. First, a properly stationary
+# AR(1) base process with constant unit variance throughout -- the sqrt(1 - rho_true^2)
+# term on each innovation is essential here; without it, the AR(1) recursion's own
+# variance compounds on top of whatever heteroscedasticity we add next, and rho and the
+# variance pattern stop being cleanly separable. Second, scale that base process by the
+# intended heteroscedasticity pattern, so the growing variance is exactly what we say it
+# is, and nothing more.
+df_nlme$residual <- unlist(lapply(1:n_subjects, function(i) {
+  base <- numeric(n_timepoints)
+  base[1] <- rnorm(1, 0, 1)
+  for (t in 2:n_timepoints) {
+    base[t] <- rho_true * base[t-1] + rnorm(1, 0, sqrt(1 - rho_true^2))
+  }
+  var_scale <- 1 + 0.2 * (0:(n_timepoints - 1))
+  sigma_base * sqrt(var_scale) * base
+}))
+
+df_nlme <- df_nlme %>%
+  mutate(score = 5.0 + 0.8 * time + residual)
+```
+
+## 6.3. Fitting Three Increasingly Realistic Models
+
+We'll fit the same fixed effect of `time` three times, adding one piece of residual structure
+at each step, so we can watch model fit improve as our assumptions get closer to how the data
+were actually generated.
+
+```{r fit-three-models}
+# Model 1: standard random-intercept model. i.i.d. residuals -- our lme4 default assumption.
+m1_iid <- lme(
+  fixed  = score ~ time,
+  random = ~ 1 | subID,
+  data   = df_nlme,
+  method = "REML"
+)
+
+# Model 2: adds an AR(1) residual correlation structure within each subject.
+m2_ar1 <- lme(
+  fixed       = score ~ time,
+  random      = ~ 1 | subID,
+  correlation = corAR1(form = ~ time | subID),
+  data        = df_nlme,
+  method      = "REML"
+)
+
+# Model 3: adds a variance function on top of the AR(1) structure, letting the residual
+# variance differ freely at each time point (varIdent estimates one scale factor per level
+# of its grouping variable -- nlme treats `time` as a grouping factor here even though the
+# column itself is numeric, so this correctly gives us one variance parameter per time point).
+m3_ar1_var <- lme(
+  fixed       = score ~ time,
+  random      = ~ 1 | subID,
+  correlation = corAR1(form = ~ time | subID),
+  weights     = varIdent(form = ~ 1 | time),
+  data        = df_nlme,
+  method      = "REML"
+)
+```
+
+```{r compare-models}
+anova(m1_iid, m2_ar1, m3_ar1_var)
+```
+
+Each model is nested inside the next (Model 2 adds one correlation parameter to Model 1;
+Model 3 adds five variance-ratio parameters to Model 2), so the likelihood-ratio tests in this
+table are valid, and both are highly significant: allowing for autocorrelation improves the
+fit substantially, and allowing the residual variance to grow over time improves it further
+still. This matches how we built the data, which of course we rigged in advance. The value
+of doing this with simulated data first is exactly that you get to confirm the method
+recovers a structure you already know is there before trusting it on real data where you
+don't.
+
+
+
+## 6.4. Visualizing the Autocorrelation Directly
+
+Beyond checking the numeric value of $\hat\rho$, it is good practice to look at the residual
+autocorrelation function (ACF) directly, both before and after adding the `corAR1` term. Keep in 
+mind that for this example, we have "baked in" a specific auto-correlation for our simulated data. 
+In reality, we don't know what the "true" autocorrelation is, so instead we would be 
+looking for any evidence of residual autocorrelation:
+
+```{r acf-plot-1, fig.align="center", fig.width=5, fig.height=4}
+# ACF()'s default residuals (resType = "pearson") are NOT adjusted for a model's fitted
+# correlation structure, so they will not show whether corAR1 actually worked. Use
+# resType = "normalized" instead. See the "Technical notes" here for the same fix in
+# another worked example: https://bbolker.github.io/mixedmodels-misc/notes/corr_braindump.html
+plot(ACF(m1_iid, maxLag = 5, resType = "normalized"), main = "Model 1 (i.i.d.) Residual ACF")
+```
+
+```{r acf-plot-2, fig.align="center", fig.width=5, fig.height=4}
+plot(ACF(m2_ar1, maxLag = 5, resType = "normalized"), main = "Model 2 (AR1) Residual ACF")
+```
+
+
+## 6.5. A Real-Data Example: Continuous Time with `corCAR1`
+
+The simulated example above uses evenly-spaced integer time points (1 through 6), which is
+exactly the situation `corAR1` was built for. But recall the longitudinal spinal-cord-injury
+data from Section 2 (`data_SCI_longitudinal_example.csv`): "these data were all collected on
+different days for different people... Month 1 as a time point might be Day 20 for some
+people, but Day 30 for others." That is precisely the situation `corCAR1` (continuous-time
+AR1) is designed for, and we don't need to simulate anything new to see it in action -- we can
+go straight back to real data we've already loaded once before.
+
+It's worth pausing on what Section 2 actually *did* with this exact dependency problem,
+because it is a clean illustration of the distinction between G-side and R-side modeling 
+that we discussed at the beginning. Section 2 never touched $\mathbf{R}_i$ at all -- 
+every one of its models used a plain $\sigma^2\mathbf{I}$ for the
+residuals. Instead, it handled the fact that a person's functional-independence scores over
+time are not independent entirely through $\mathbf{G}$, by building an increasingly rich
+random-effects structure: a random intercept, then a random linear slope for `year.0`, then a
+random quadratic term, then a random cubic term -- each addition justified by a significant
+likelihood-ratio test ($\chi^2(3)=1046.98$, then $\chi^2(4)=746.46$, then $\chi^2(5)=252.32$).
+That is twelve additional variance and covariance parameters, across three model comparisons,
+spent on capturing more and more of the within-subject dependency by letting each person's
+*own trajectory shape* bend to fit their data. This was a perfectly reasonable strategy --
+per Part 6.6 (below), a rich enough $\mathbf{G}$ can produce well-calibrated fixed-effect tests
+without ever modeling $\mathbf{R}_i$ explicitly, and Section 2 was, after all, primarily
+interested in testing whether AIS Grade predicts the *shape* of that trajectory, which needed
+those polynomial fixed effects regardless.
+
+`corCAR1` offers a genuinely different way to attack the same underlying dependency. Instead
+of asking $\mathbf{G}$ to become progressively richer, one polynomial term at a time, it
+models the persistence directly, in $\mathbf{R}_i$, with a single interpretable parameter:
+how strongly today's score predicts a score close in time, decaying continuously the further
+apart two assessments are. Let's fit the simplest possible version -- deliberately using only
+a linear fixed effect of `year.0` and only a random *intercept*, so that whatever improvement
+we see is attributable to $\mathbf{R}_i$ alone, not to a richer $\mathbf{G}$:
+
+```{r real-data-corCAR1, message=FALSE}
+DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv",
+                 stringsAsFactors = TRUE)
+DAT2$year.0 <- (DAT2$time - 1) / 12
+
+m_iid_real  <- lme(rasch_FIM ~ year.0, random = ~ 1 | subID, data = DAT2, method = "REML")
+m_car1_real <- lme(rasch_FIM ~ year.0, random = ~ 1 | subID,
+                    correlation = corCAR1(form = ~ year.0 | subID),
+                    data = DAT2, method = "REML")
+
+anova(m_iid_real, m_car1_real)
+summary(m_car1_real)$modelStruct$corStruct
+```
+
+The improvement in fit here is enormous, and reflective of patterns you'd likely see in real
+data -- functional independence really does show strong day-to-day/month-to-month carryover
+within a person (someone recovering quickly at Month 3 is very likely to still be 
+recovering quickly at Month 4). Notice what it took to get here, however:
+Section 2 spent twelve parameters, across an intercept, a slope, a quadratic, and a cubic
+random effect, progressively chipping away at within-subject dependency while *also* building
+a detailed picture of average recovery curvature. Here, a *single* additional parameter --
+$\hat\rho$ -- captures a comparable order of magnitude of improvement (a likelihood-ratio
+statistic of 787.84, on just 1 degree of freedom), because it is aimed squarely at the
+dependency itself rather than approximating it by modeling trajectory shape.
+This is not quite an apples-to-apples comparison -- Section 2's rich $\mathbf{G}$ was doing
+double duty, capturing genuine nonlinear curvature *and* individual differences in that
+curvature. In contrast, `corCAR1` alone tells us nothing about individual or group level 
+trajectories, but it does give us a parsimonious way of dealing with statistical dependency 
+in our residuals. 
+
+The two different approaches are not mutually exclusive, either. Nothing stops you from combining them --
+fitting Section 2's cubic random-effects growth curve *and* an explicit `corCAR1` term in the
+same model, if you have reason to think meaningful residual autocorrelation remains even after
+allowing each person their own curve. In practice, with only 40 subjects, that combined model
+is asking a great deal of the data at once, and Section 3's discussion of singular fits is a
+good reminder to check convergence carefully -- and to consider, per Part 6.6.4, whether your
+actual research question (testing a fixed effect vs. interpreting the variance components)
+calls for that additional complexity at all -- before trusting it.
+
+This is also a good habit to build for its own sake: whenever this repository already has a
+real dataset whose design fits the technique you're learning, it's worth running the new
+technique on it, rather than only ever practicing on data you simulated yourself. You already
+know quite a lot about this dataset from Section 2 (e.g., the growth curves in Figure/plot
+form, the negative-exponential model, the AIS Grade comparisons), and layering `corCAR1` on
+top of that existing understanding -- and directly comparing it to the strategy Section 2 already
+used -- is a much faster way to build intuition than starting over with an unfamiliar variable
+name.
+
+## 6.6. When Does the G-Side/R-Side Distinction Actually Matter?
+
+We now have the tools to model $\mathbf{R}_i$ directly, which raises a sharper question than
+"why don't we always use `nlme`": given that $\text{Var}(\mathbf{y}_i) = \mathbf{Z}_i \mathbf{G}
+\mathbf{Z}_i^T + \mathbf{R}_i$ simply *adds* the two pieces together, how much does it actually
+matter whether a given source of dependency is captured by $\mathbf{G}$ or by $\mathbf{R}_i$?
+The honest answer depends heavily on what you are using the model for -- and it is different
+for the two things we typically want out of a mixed-effects model: testing fixed effects, and
+interpreting the random effects themselves.
+
+### 6.6.1 Fixed-Effect Point Estimates: Robust to the G/R Partition
+
+Every mixed model estimates its fixed effects using a form of generalized least squares:
+observations get combined into an estimate of $\boldsymbol{\beta}$, weighted by how much
+information each one is assumed to carry, where those weights come directly from the model's
+assumed covariance structure, $\mathbf{Z}_i \mathbf{G} \mathbf{Z}_i^T + \mathbf{R}_i$. If that
+assumed structure is *somewhat* wrong -- say, because real residual autocorrelation gets
+folded into $\mathbf{G}$ instead of being modeled explicitly as $\mathbf{R}_i$ -- the weights
+used to combine observations are no longer the *most efficient* possible weights, but they
+remain a reasonable, unbiased way to combine the data. This is the same basic robustness
+property that keeps ordinary regression coefficients unbiased even under heteroscedasticity:
+getting the variance structure wrong costs you precision, and (as the next section shows) can
+cost you calibration, but it does not, in general, introduce bias into the point estimate
+itself. 
+
+### 6.6.2 Fixed-Effect Standard Errors: Depends on Whether G Is Rich Enough
+
+Standard errors are a different story, because they depend directly on how much
+*independent* information the model believes it has. Picture a subject's scores over time
+genuinely following an autocorrelated, "streaky" pattern -- a run of a few good days, then a
+run of a few bad days -- rather than bouncing around independently from one time point to the
+next. A model built only on a random intercept assumes **compound symmetry**: any two of that
+subject's time points are equally correlated, no matter how close together or far apart they
+are. Such a model has no way to distinguish "four genuinely independent measurements" from
+"four measurements drawn from the same short streak." It ends up treating a temporally
+clustered, highly-correlated run as if it carried nearly as much information as four
+independent looks at the subject's true trend -- which overstates the precision of that trend
+estimate and understates its standard error. The risk is highest specifically for fixed
+effects that describe *change over time* (like a slope), since that is exactly the kind of
+estimate a "streaky" pattern can most easily fool.
+
+A random **slope** changes this picture substantially. Once each subject is allowed their own
+individual line -- their own intercept and their own rate of change -- a temporary streak (a
+subject who happens to be running high across several adjacent time points) can be partly
+absorbed into that subject's own line, instead of being mistaken for extra evidence about the
+population-level trend. This does not literally "discover" that an autocorrelated process
+generated the data -- the model still has no explicit concept of residual autocorrelation --
+but a random slope is flexible enough to approximate a good share of the same pattern (runs of
+similar values, within a subject, over nearby time points), which tends to pull the resulting
+fixed-effect standard errors back toward being well-calibrated, even without ever touching
+$\mathbf{R}_i$ directly.
+
+The practical lesson: **the risk of an anti-conservative fixed-effect standard error is
+highest when $\mathbf{G}$ is sparse** -- often just a random intercept -- **and the true
+dependency has real structure over time** (autocorrelation, or variance that changes with
+time). A random-effects structure with slopes that track the shape of your growth curves,
+exactly as Sections 2 and 4 already recommend, substantially closes that gap, because it gives
+the model a flexible, subject-specific way to absorb exactly the kind of statistical dependence 
+that we would otherwise need to model with a more complex $\mathbf{R}_i$.
+
+### 6.6.3 Random-Effect Variance Components: Where the Partition Matters Much More
+
+Unliketing estimating/testing fixed effects, estimating the variance of random effects
+is a different matter entirely, because they *are* the answer to
+"how is the total variance divided up" -- and that is precisely the question a G/R
+misattribution gets wrong. Picture the total variance
+in your outcome as a pie, correctly sized: a model that folds real residual autocorrelation
+into $\mathbf{G}$ instead of modeling it explicitly as $\mathbf{R}_i$ is not making the pie
+the wrong size -- it is cutting the *same* pie along the wrong lines. Some of what should
+properly be described as "unexplained, time-varying noise within a subject" ($\mathbf{R}_i$)
+gets relabeled as "this subject's true, stable individual difference" ($\mathbf{G}$), which
+typically inflates the estimated between-subject (intercept) variance.
+
+If your model also includes a random slope, the story gets one layer more complicated: some of
+that same misattributed variance can get pulled specifically into the *slope* variance instead
+of the intercept variance, since a random slope is one of the more flexible tools the model has
+available for approximating a "streaky," time-varying pattern. That can make it
+look as though people genuinely differ in their rate of change, when a meaningful share of
+that apparent variability is actually unmodeled residual dependency, misattributed to the wrong
+place in $\mathbf{G}$.
+
+This is the asymmetry worth remembering: **a fixed-effect hypothesis test can come out
+well-calibrated using nothing but a rich $\mathbf{G}$, because it only cares about the
+*total* variance behind the estimate; but if your actual research question is about the
+variance components themselves** -- how much people differ in level, or in trajectory, a
+reasonable and clinically meaningful question in rehabilitation research (Sections 2 and 8) --
+**the G/R partition matters much more**, because a model can pass a well-calibrated 
+fixed-effect test while still giving a distorted answer to random effects.
+
+### 6.6.4 So, When Should You Still Reach for `nlme`?
+
+Putting this together, `nlme`'s explicit $\mathbf{R}_i$ modeling is most worth reaching for
+when:
+
+* **The variance components are your actual research question** -- you want to report or
+  interpret how much subjects differ in level or trajectory, not just test a fixed effect,
+  and you need those estimates to reflect real between-subject differences rather than
+  unmodeled residual dependency.
+* **Your time structure doesn't fit neatly into a low-order polynomial random-effects
+  structure** -- e.g., truly irregular, continuous-time data like Section 2's SCI dataset,
+  where `corCAR1` handles the actual observation times directly, rather than approximating
+  them through a random slope (and, per Section 2's own warning, high-order polynomial random
+  effects bring their own collinearity problems as you add more terms).
+* **You have a genuinely sparse $\mathbf{G}$** (often just a random intercept) and reason to
+  suspect real autocorrelation or heteroscedasticity beyond what compound symmetry can
+  capture -- exactly the situation described in Part 7.2 above, where a sparse $\mathbf{G}$
+  produced overconfident, anti-conservative inference about a time trend.
+* **The dependency structure is itself the scientific finding** -- e.g., "does variability
+  grow over time" is a claim about $\mathbf{R}_i$, and answering it well requires modeling
+  $\mathbf{R}_i$ directly rather than inferring it indirectly from how well a random-slope
+  model happens to fit.
+
+And, as before, there's a structural reason you can't simply default to `nlme` for everything:
+`nlme` handles nested random effects gracefully but cannot fit fully **crossed** random effects
+at all (Section 8, participants crossed with items/stimuli), while `lme4` handles crossed
+random effects easily but cannot model residual correlation structures like `corAR1`. In
+practice: reach for `nlme` when you specifically need $\mathbf{R}$-side structure for one of
+the four reasons above; reach for `lme4` (with as rich a $\mathbf{G}$ as your design supports)
+for crossed sampling units, and trust it more than you might expect for fixed-effect inference
+even with longitudinal dependency. If you need crossed random effects *and* explicit
+$\mathbf{R}$-side structure at once, `glmmTMB` (Section 7) is increasingly a tool of choice,
+since it supports both within the same model.
+
+## Summary
+
+* $\mathbf{G}$ (random effects) and $\mathbf{R}_i$ (residuals) both contribute to
+  $\text{Var}(\mathbf{y}_i)$, and a sufficiently rich $\mathbf{G}$ -- like the random-slope
+  growth-curve models built in Sections 2 and 4 -- can already capture a meaningful share of
+  real autocorrelation, without ever touching $\mathbf{R}_i$. `lme4`'s inability to model
+  $\mathbf{R}_i$ directly is a real but narrow limitation, not a general inadequacy for
+  longitudinal data.
+* Fixed-effect point estimates are robust to how dependency is partitioned between
+  $\mathbf{G}$ and $\mathbf{R}_i$. Fixed-effect standard errors are *not* automatically robust
+  to this -- they tend to be well-calibrated when $\mathbf{G}$ is rich enough to approximate
+  the true dependency (e.g., a random slope that can absorb "streaky," time-correlated
+  patterns), and can be meaningfully anti-conservative when $\mathbf{G}$ is sparse (e.g., if you only have 
+  a random intercept, which cannot represent anything beyond a constant, compound-symmetric
+  correlation).
+* The variance components themselves are considerably more sensitive to this partition than
+  the fixed effects are -- a model can pass a fixed-effect calibration check while still
+  giving a biased answer to "how much do subjects differ," because it achieved that
+  calibration by misattributing dependency to the wrong variance component.
+* `nlme::lme()` lets you specify an explicit residual correlation structure
+  (`correlation = corAR1(...)`, `corCAR1(...)`, `corCompSymm(...)`, `corSymm(...)`) and/or an
+  explicit variance function (`weights = varIdent(...)`, among others) -- reach for it when
+  the variance components are your actual question, your time structure doesn't fit a
+  low-order polynomial random-effects structure, your $\mathbf{G}$ is sparse relative to the
+  true dependency, or the dependency structure is itself the finding.
+* Compare models sequentially with `anova()` (a nested-model likelihood-ratio test, just as
+  we did for the unconditional growth models in Section 2) rather than jumping straight to
+  the most complex structure.
+* Misspecifying one piece of the covariance structure (e.g., leaving out heteroscedasticity)
+  can bias your estimates of a different piece (e.g., the autocorrelation parameter) --
+  inspect more than one diagnostic before concluding a model is "good enough."
+
+
+## References
+Pinheiro, J., & Bates, D. (2006). *Mixed-effects models in S and S-PLUS*. Springer.
+
+Pinheiro, J., Bates, D., & R Core Team. (2022). nlme: Linear and Nonlinear Mixed Effects
+Models. https://CRAN.R-project.org/package=nlme

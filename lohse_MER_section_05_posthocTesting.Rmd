@@ -1,0 +1,586 @@
+---
+title: 'Section 5: Fixed-Effect Coding, Centering, and Post-Hoc Contrasts with `emmeans`'
+author: "Keith Lohse, PhD, PStat"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Every mixed-effects model we have built so far (Sections 1-4) has ended at the omnibus
+test: an F-value (or a set of F-values) telling us whether a main effect or interaction is
+"significant." In practice, that is rarely the end of the story, and getting the follow-up
+questions right turns out to depend on something we have quietly glossed over until now: how
+R actually represents a categorical predictor as numbers, and where a continuous predictor's
+zero point sits. This section works through both of those issues in detail -- because they
+turn out to matter more, and in a more subtle way, than "use the default and it'll be fine" --
+and then introduces the package, `emmeans`, that helps us sidestep complex issues related to 
+how we coded our variables and focus on the comparisons we care about the most.
+
+## 5.1. Two Different Questions
+
+Every fitted mixed model actually answers two related but distinct kinds of question, and it
+is worth being precise about which one you are asking at any given moment:
+
+* **`summary(model)`** gives you individual regression coefficients ($\beta$'s) and their
+  $t$-tests. Each coefficient is a specific, named comparison (e.g., a difference from a
+  reference level, or a slope for one specific group) and *which* comparison it represents
+  depends entirely on how the predictor was coded.
+* **`anova(model)`** (or `car::Anova(model, type="III")`) gives you an omnibus $F$-test (or,
+  for GLMMs, a $\chi^2$ test) for a whole term at once (e.g., "does `condition`, as a whole,
+  matter?") collapsing across whichever specific comparisons happen to make up that term.
+
+You might reasonably expect the *omnibus* test, at least, to be immune to something as
+seemingly cosmetic as how a factor's levels are coded. That expectation turns out to be only
+partly right, and the ways it fails causes real, reproducible confusion when a 
+mixed-effects model doesn't match what a repeated-measures ANOVA would have
+said, or when adding a covariate to a model unexpectedly changes an unrelated-looking
+$p$-value.
+
+## 5.2. How R Codes Categorical Predictors
+
+By default, R represents an unordered factor using **treatment (dummy) coding**: one level is
+chosen as the reference (alphabetically first, unless you say otherwise), and every other
+level gets a column that is 1 for that level and 0 everywhere else. This is what has been
+happening, invisibly, in every model we've fit so far. Two alternatives come up constantly
+enough to be worth naming:
+
+* **Sum (effects) coding** (`contr.sum`): each non-reference level is coded relative to the
+  *grand mean* rather than to one specific reference level, and the coefficients sum to zero
+  across levels.
+* **Polynomial (orthogonal) coding** (`contr.poly`): built for **ordered** factors, decomposing
+  the factor's effect into linear, quadratic, cubic, etc. trend components. This is R's own
+  default for any factor you explicitly declare with `factor(..., ordered = TRUE)` --
+  R's global `options("contrasts")` setting is actually a *pair*,
+  `c("contr.treatment", "contr.poly")`: the first element governs unordered factors, the
+  second governs ordered ones. You get polynomial contrasts automatically for an ordered
+  factor without changing anything.
+
+All of these coding schemes describe the *same* fitted regression surface (i.e., they are just
+different bases for representing the same set of group differences) so it's natural to
+assume the choice among them is purely cosmetic. But it gets more complicated than that...
+
+## 5.3. Does the Coding Scheme Change the Omnibus Test?
+
+We'll use the mixed-factorial model we already built in Section 3, Part 3
+(`mod3 <- lmer(speed ~ age_group*condition + (1|subID), data=data_COND)`), refit under both
+coding schemes.
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(car)
+library(emmeans)
+```
+
+```{r reload-section3-data, message=FALSE}
+DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv",
+                 stringsAsFactors = TRUE)
+data_COND <- DATA %>% group_by(subID, condition, age_group, group) %>%
+  summarize(speed = mean(speed, na.rm = TRUE), .groups = "drop") %>%
+  arrange(age_group, subID, condition)
+```
+
+```{r coding-comparison-lmertest}
+options(contrasts = c("contr.treatment", "contr.poly"))  # R's default
+mod3_treat <- lmer(speed ~ age_group*condition + (1|subID), data = data_COND, REML = TRUE)
+
+options(contrasts = c("contr.sum", "contr.poly"))
+mod3_sum <- lmer(speed ~ age_group*condition + (1|subID), data = data_COND, REML = TRUE)
+
+cat("Treatment coding, lmerTest::anova():\n")
+anova(mod3_treat)
+cat("\nSum coding, lmerTest::anova():\n")
+anova(mod3_sum)
+```
+
+These match exactly, for every term, down to the decimal. That's reassuring, and it's the
+result we've implicitly been relying on every time we've run `anova()` in this repository so
+far. But watch what happens if we ask the same question a different way, using
+`car::Anova(type = "III")` instead of `lmerTest::anova()` -- a function we already used
+alongside `anova()` back in Section 2:
+
+```{r coding-comparison-car}
+cat("Treatment coding, car::Anova(type=3):\n")
+car::Anova(mod3_treat, type = 3, test.statistic = "F")
+cat("\nSum coding, car::Anova(type=3):\n")
+car::Anova(mod3_sum, type = 3, test.statistic = "F")
+```
+
+Now `age_group` is genuinely different: F = 57.15 under treatment coding, F = 47.18 under sum
+coding -- and the sum-coded number is the one that agrees with `lmerTest::anova()` above. This
+is not a small-sample or unbalanced-data artifact, either -- `data_COND` is a perfectly
+balanced design (20 subjects per age group, equal cell sizes throughout), and the discrepancy
+still shows up. The reason is structural, not statistical: `car::Anova(type=3)`'s test for a
+lower-order term (like the main effect of `age_group`) is computed by dropping that term's
+columns while holding the interaction's columns fixed -- and because the interaction's columns
+are literally built by multiplying the main-effect columns together, *how* those main-effect
+columns were coded changes what "holding the interaction fixed" even means. Treatment coding's
+columns are not centered (a reference level is coded 0, not $-0.5$), so they don't have the
+orthogonality property that makes this comparison well-behaved; sum and polynomial coding's
+columns do.
+
+`lmerTest::anova()` computes its Type III test in a way that sidesteps the problem of how categorical
+factors are coded by effectively recoding our *categorical* factors "under the hood" based on the 
+underlying cell-means structure. This is why our `anova()` outputs agreed regardless of coding and 
+why nothing in Sections 1-4 broke despite never touching the default contrasts. When we switched to
+`car::Anova()` for out ANOVA tables, however, there is no implicit recoding of the categorical factors 
+and the omnibus tests are sensitive to how we coded the variables. 
+
+Additionally, if you introduce any imbalance into `data_COND` (unequal group sizes, missing
+cells), `lmerTest::anova()` continues to agree with itself under either coding scheme, while
+`car::Anova(type=3)` continues to require sum-style contrasts to match it. So the practical
+rule for *categorical* predictors is narrower than "always change your contrasts or everything
+breaks": it's specifically that **`car::Anova(type="III")` needs sum (or polynomial)
+contrasts to agree with what a factorial ANOVA -- or `lmerTest::anova()` -- would say**,
+whenever an interaction is present. If you only ever use `lmerTest::anova()` for your omnibus
+tests, as this repository has so far, you have been safe by accident. It's worth setting sum
+contrasts anyway, both for this reason and because (as we'll see next) the coding of *categorical* 
+factors does nothing to how *continuous* variables are represented in the model.
+
+## 5.4. Continuous Covariates: Centering Matters Even More
+
+Contrast coding is a question specifically about *categorical* factors. A different, and in
+practice more consequential, version of the same underlying issue shows up whenever a
+*continuous* covariate is involved in an interaction -- and no amount of `options(contrasts=)`
+fixes it, because there's no factor and no contrast scheme involved at all. The relevant
+choice here is simply: where does the continuous variable's zero point sit?
+
+To see how much this matters, we'll simulate a small Group x Time growth-curve design --
+structurally identical to the models we built in Section 2, without any centering applied yet.
+
+```{r simulate-group-time}
+set.seed(99)
+n_sub <- 40
+df_gt <- expand.grid(subID = factor(1:n_sub), time = 1:4) %>%
+  mutate(group = factor(if_else(as.numeric(subID) <= n_sub/2, "Control", "Treatment")))
+
+sub_rfx <- rnorm(n_sub, 0, 2); names(sub_rfx) <- levels(df_gt$subID)
+df_gt <- df_gt %>%
+  mutate(score = 10 + 0.5*time + 2*(group=="Treatment") + 1.2*time*(group=="Treatment") +
+           sub_rfx[subID] + rnorm(n(), 0, 1),
+         time.c = time - mean(time))
+
+options(contrasts = c("contr.treatment", "contr.poly"))  # Group's coding is held fixed throughout
+```
+
+```{r fit-uncentered-vs-centered}
+m_uncentered <- lmer(score ~ group * time   + (1 + time   | subID), data = df_gt)
+m_centered   <- lmer(score ~ group * time.c + (1 + time.c | subID), data = df_gt)
+
+cat("Uncentered time, lmerTest::anova():\n")
+anova(m_uncentered)
+cat("\nCentered time.c, SAME Group coding, lmerTest::anova():\n")
+anova(m_centered)
+```
+
+Group's coding never changed between these two models -- it's treatment coding both times.
+The *only* thing that changed is where `time` sits relative to zero, and the `group` test
+swings from F = 16.27 to F = 68.38. `time` and `group:time`, meanwhile, are identical in both
+models. We can see exactly why by looking at the correlation among the fixed-effect estimates:
+
+```{r correlation-of-fixed-effects}
+cat("Uncentered model:\n")
+round(cov2cor(vcov(m_uncentered)), 3)
+cat("\nCentered model:\n")
+round(cov2cor(vcov(m_centered)), 3)
+```
+
+In the uncentered model, `group` and `group:time` are correlated at $-0.47$; after centering,
+that drops to $-0.03$. Uncentered, `time` never crosses zero, so the interaction column
+(`group` $\times$ `time`) is nearly a rescaled copy of the plain `group` column for any given
+subject -- the two terms are fighting over the same variance, and the model can no longer
+cleanly attribute it to one or the other. This is precisely the collinearity mechanism
+discussed in Section 9's diagnostics chapter, just showing up directly in an ANOVA table
+instead of a VIF number.
+
+This is not only a simulated-data phenomenon. Go back to Section 2's own SCI data, which
+already builds *two* versions of the time variable -- `year.0` (shifted so the first
+assessment is at time 0) and `year.c` (mean-centered via `scale()`).
+
+```{r real-data-centering, message=FALSE}
+DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv",
+                 stringsAsFactors = TRUE)
+DAT2$year.0 <- (DAT2$time - 1) / 12
+DAT2$year.c <- as.numeric(scale(DAT2$time, scale = FALSE))
+
+m_yr0 <- lmer(rasch_FIM ~ year.0 * AIS_grade + (1 + year.0 | subID), data = DAT2, REML = FALSE,
+              control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 5e5)))
+m_yrc <- lmer(rasch_FIM ~ year.c * AIS_grade + (1 + year.c | subID), data = DAT2, REML = FALSE,
+              control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 5e5)))
+
+cat("year.0 (baseline-referenced), AIS_grade F-test:\n")
+anova(m_yr0)["AIS_grade", ]
+cat("\nyear.c (mean-centered), AIS_grade F-test:\n")
+anova(m_yrc)["AIS_grade", ]
+```
+
+The shift here is much smaller than in our synthetic example -- `year.0`'s mean is only about
+0.75 years away from zero, not a full two units like our simulated `time` -- so the `AIS_grade`
+F-value only moves from about 25.4 to 25.0, not from 16 to 68. But it moves in exactly the same
+direction for exactly the same reason, on data you've already been using since Section 2. The
+size of the shift scales with how far the covariate's typical values sit from zero relative to
+its own spread -- which is exactly why the effect was dramatic in our synthetic example (`time`
+ranging narrowly from 1 to 4, nowhere near zero) and comparatively subtle here.
+
+## 5.5. Why This Happens, and What to Do About It
+
+Step back from the mechanics for a moment. What does "the main effect of Group" even mean, in
+a model that also contains a Group x Time interaction? Read literally, a Type III test of a
+lower-order term is asking: *does removing this term change the fit, holding the interaction
+fixed?* But "holding the interaction fixed" is only a well-posed question once you've fixed
+*where* the other variable in that interaction is sitting -- at its reference level (if
+categorical) or at some specific value (if continuous). Treatment coding implicitly answers
+"at the reference level"; an uncentered continuous covariate implicitly answers "at zero,"
+wherever that happens to fall. Neither of those is a *wrong* answer, exactly -- they're
+perfectly valid, specific questions -- but they are only sometimes the question that researchers 
+want to ask. That is, researchers are often interested in *main effects* and *interactions*,
+not *simple effects* and interactions. 
+
+* A *main effect* asks about the effect of Variable A on average across all levels 
+  of Variable B -- e.g., "does Group matter, on average, across the full range of 
+  Time we actually studied?" When Time is centered around it's own mean and there 
+  is a Group x Time interaction in the model, then the effect of Group is "on average"
+  across time because on average is when `Time = 0`.
+
+* A *simple effect asks about the effect of Variable A at a specific level of 
+  Variable B -- e.g, "does Group matter at the very first observation at the beginning
+  of our study?" If the first observation is coded as 0 and a Group x Time interaction is 
+  included in the model, then the effect of Group is "at the beginning" because the 
+  intercept is when `Time = 0`. 
+
+
+
+Two practical habits follow directly from this:
+
+1. **For unordered categorical factors**, set sum contrasts (`contr.sum`) rather than relying
+   on the default. For genuinely **ordered** categorical factors with a small number of
+   discrete levels (a 3-level dose, a small number of trial blocks treated as a factor),
+   `contr.poly` is an even better choice, since polynomial contrasts are automatically
+   mean-centered *and* mutually orthogonal -- it solves both problems in this section at once,
+   for that variable. In practice, that means setting:
+   ```{r sum-and-poly-default, eval=FALSE}
+   options(contrasts = c("contr.sum", "contr.poly"))
+   ```
+   which changes nothing for the omnibus tests you get from `lmerTest::anova()` (as we saw
+   above), but *does* matter the moment you use `car::Anova()`, and makes every individual
+   `summary()` coefficient a deviation from the grand mean rather than from an arbitrary
+   reference level -- generally the more useful default for interpretation once interactions
+   are involved.
+2. **For continuous covariates that appear in any interaction**, mean-center them explicitly (or
+   choose some other meaningful, deliberate reference point) rather than leaving them on their
+   raw scale. This is not something any `options()` setting can do for you, because there's no
+   factor and no contrast scheme involved -- it has to happen in your data, as
+   `year.0`/`year.c`/`time.c` already do throughout this repository. Do this by habit, before a
+   diagnostic tool (like Section 9's `check_collinearity()`) has to catch it for you.
+
+## 5.6. The Escape Hatch: Let `emmeans` do linear algebra for you!
+
+Fortunately, there a clean way to handle all of these issues, and it's the reason this section exists.
+Instead of agonizing over how your coding and centering choices line up with the specific
+question you meant to ask, you can just ask the question directly, at a value (or averaged
+over values) that you name yourself. That is exactly what `emmeans` (for categorical
+predictors and factor levels) and its companion `emtrends` (for the *slope* of a continuous
+predictor) do -- and because they work directly from the fitted regression surface rather than
+from any particular parameterization of it, they give the same answer regardless of how you
+coded or centered anything.
+
+*To be clear* coding and centering are critically important to make sure we are getting 
+the main-effects/interactions we want in an ANOVA table, or to make sure we are interpreting
+`summary()` output correctly. But regardless of the codes we used, we can always recover
+specific comparisons we want using `emmeans`.`
+
+We can check this directly, reusing the two Group x Time models we just built, which
+disagreed so sharply on their omnibus `group` test:
+
+```{r emtrends-invariance}
+cat("Slope of time within each group -- UNCENTERED model:\n")
+emtrends(m_uncentered, ~ group, var = "time")
+cat("\nSlope of time within each group -- CENTERED model:\n")
+emtrends(m_centered, ~ group, var = "time.c")
+```
+
+```{r emmeans-invariance}
+cat("Predicted score for each group AT time = 4 -- UNCENTERED model:\n")
+emmeans(m_uncentered, ~ group, at = list(time = 4))
+cat("\nPredicted score for each group AT the same real point -- CENTERED model:\n")
+emmeans(m_centered, ~ group, at = list(time.c = 4 - mean(1:4)))
+```
+
+Identical, to the decimal, in both cases -- despite the wildly different omnibus `group`
+$F$-tests we found in Section 4 for these same two models. This is the real payoff of learning
+`emmeans`: it's not merely a convenience for formatting post-hoc tables, it's a way of asking
+your model a precisely-specified question (a slope, or a mean at a named point) that doesn't
+inherit the ambiguity built into an omnibus test of a lower-order term. The rest of this
+section is about learning to use that tool well.
+
+## 5.7. A Quick Note on Degrees of Freedom
+
+Because mixed-effects models don't have a single, clean residual degrees of freedom the way
+ordinary regression does (see the discussion of the Satterthwaite approximation in Section 1
+and Section 3), every post-hoc test built on top of a mixed model has to make the same choice
+that the omnibus test did. `emmeans` gives you the same two options we've already seen:
+
+* **Satterthwaite**: the default in `lmerTest`, computationally cheap, and the same
+  approximation you've already seen in Sections 1-4.
+* **Kenward-Roger**: adjusts the covariance matrix of the fixed effects for small-sample
+  bias in addition to adjusting the degrees of freedom, which makes it a somewhat more
+  conservative (and more computationally expensive) choice. It requires the `pbkrtest`
+  package, which `emmeans` and `lmerTest` will use automatically if it is installed.
+
+For a single model, the two will typically agree quite closely; the difference matters most in
+small samples with a lot of missing data or unbalanced cell sizes.
+
+## 5.8. A Worked Example: A 2 (Group) x 3 (Time) Design
+
+To practice the mechanics of `emmeans` itself, we will simulate one more small data set: a
+hypothetical randomized controlled trial in which 50 participants (25 Control, 25 Treatment)
+were measured at three time points (Pre, Post, and a Followup session). This is a deliberately
+"clean," fully-balanced design, distinct from the continuous-time example above, so that the
+reference-grid ordering and the custom-contrast weights below are easy to see.
+
+```{r simulate-data, message=FALSE, warning=FALSE}
+options(contrasts = c("contr.sum", "contr.poly"))
+
+set.seed(42)
+n_per_group <- 25
+subjects <- factor(1:(n_per_group * 2))
+
+df_emmeans <- expand.grid(
+  subID = subjects,
+  time  = factor(c("Pre", "Post", "Followup"), levels = c("Pre", "Post", "Followup"))
+) %>%
+  mutate(
+    group = factor(if_else(as.numeric(subID) <= n_per_group, "Control", "Treatment"))
+  )
+
+sub_rfx <- rnorm(n_per_group * 2, mean = 0, sd = 2.0)
+names(sub_rfx) <- levels(subjects)
+
+df_emmeans <- df_emmeans %>%
+  mutate(
+    time_eff = case_when(time == "Pre" ~ 0, time == "Post" ~ -1.5, time == "Followup" ~ -2.0),
+    grp_eff  = if_else(group == "Treatment", 0.5, -0.5),
+    int_eff  = case_when(
+      group == "Treatment" & time == "Post" ~ -2.5,
+      group == "Treatment" & time == "Followup" ~ -3.5,
+      TRUE ~ 0
+    ),
+    score = 10 + time_eff + grp_eff + int_eff + sub_rfx[subID] + rnorm(n(), 0, 1.2)
+  )
+```
+
+```{r fit-model}
+model_f5 <- lmer(score ~ group * time + (1 | subID), data = df_emmeans, REML = TRUE)
+
+# Omnibus Type III test, using Kenward-Roger degrees of freedom this time for variety
+anova(model_f5, type = 3, ddf = "Kenward-Roger")
+```
+
+The Group x Time interaction is significant, which tells us the Treatment effect is not
+constant across time -- but it doesn't tell us *where* the groups start to differ. That's
+where `emmeans` comes in.
+
+## 5.9. Estimated Marginal Means
+
+```{r emmeans-grid}
+emm_int <- emmeans(model_f5, ~ group * time, lmer.df = "Kenward-Roger")
+emm_int
+```
+
+This table is the heart of everything that follows: it is the model's best estimate of the
+mean score in each of the six Group x Time cells, each with its own standard error and
+confidence interval, all computed on a balanced grid directly from `model_f5`'s fixed effects
+(marginalizing over the random intercept for subject). Every contrast we compute below is just
+a weighted combination of these six numbers.
+
+## 5.10. Pairwise Post-Hoc Comparisons
+
+### 5.10.1 All Pairwise Comparisons (Tukey-Corrected)
+
+If we genuinely want to compare every cell to every other cell (all $\binom{6}{2}=15$ pairs),
+we should control the familywise error rate across all 15 tests. The Tukey HSD adjustment is
+the reasonable choice for this "compare everything to everything" situation:
+
+```{r pairwise-tukey}
+pairs_all <- contrast(emm_int, method = "pairwise", adjust = "tukey")
+summary(pairs_all)
+```
+
+Fifteen tests is a lot to look at, and most of them are not actually questions we set out to
+ask (do we really care whether Control-Pre differs from Treatment-Followup?). In practice, a
+more targeted set of comparisons -- driven by our actual hypotheses -- is usually more useful,
+and lets us use a less conservative correction because we are testing fewer, more specific
+things (e.g., see my video on stategies for post-hoc testing: https://www.youtube.com/watch?v=Qr1hxsMIGck).
+
+### 5.10.2 Simple Effects: Comparing Groups at Each Time Point
+
+Our first real question is: at which time point(s) do Control and Treatment actually differ?
+This calls for comparing `group` *within* each level of `time` -- what is often called a test
+of **simple effects**. We ask `emmeans` for this directly with the `|` (conditioning) operator:
+
+```{r simple-effects-group}
+emm_by_time <- emmeans(model_f5, ~ group | time)
+pairs_by_time <- pairs(emm_by_time, adjust = "sidak")
+pairs_by_time
+```
+
+Because we are only running three tests here (one per time point), the Sidak correction --
+slightly less conservative than Tukey's HSD -- is a reasonable choice, appropriate for 
+a small pre-specified family of comparisons. The pattern is exactly what the interaction term
+predicted: the groups do not differ at baseline (as they shouldn't, since participants were
+randomized before treatment began), and a Control-Treatment gap opens up by the Post
+assessment and grows larger by Followup.
+
+### 5.10.3 Simple Effects: Comparing Time Points Within Each Group
+
+We can just as easily flip the conditioning around and ask whether each group changes over
+time on its own:
+
+```{r simple-effects-time}
+emm_by_group <- emmeans(model_f5, ~ time | group)
+pairs_by_group <- pairs(emm_by_group, adjust = "holm")
+pairs_by_group
+```
+
+Here we've used the Holm correction instead of Sidak, mostly to illustrate that `emmeans`
+supports several standard adjustment methods (`"tukey"`, `"sidak"`, `"holm"`, `"bonferroni"`,
+`"fdr"`, and `"none"` among others) and you should pick the one that matches how conservative
+you want to be, not just default to whichever one you saw in the last paper you read. Personally, 
+I err on the side of not correcting, *but* transparently reporting all tests (see: Rothman, 1990; 
+Hoffman et al., 2026). I like this approach because it allows readers to decide 
+how conservative they want to be, but that sort of subjectivity is not always desirable 
+when statistical significance is being employed for decision making. 
+
+## 5.11. Custom Contrasts
+
+Sometimes none of the "off-the-shelf" comparisons above are quite the question we actually
+want to ask. Suppose our real, pre-registered hypothesis was narrower than "do all time points
+differ": we specifically expected that **the Treatment group's Followup score would be lower
+than the average of its own Pre and Post scores** (i.e., that any initial treatment gains would
+be maintained, not reversed, by Followup). We can build that exact contrast by hand.
+
+The key to writing a custom contrast is knowing the *order* that `emm_int` lists its cells in,
+because that is the order your weights need to line up with:
+
+```{r show-grid-order}
+emm_int
+```
+
+The grid above lists the six cells in this order: Control-Pre, Treatment-Pre, Control-Post,
+Treatment-Post, Control-Followup, Treatment-Followup. Our hypothesis only involves the
+Treatment group, so every "Control" cell gets a weight of 0, and we want:
+$$\text{Treatment-Followup} - \tfrac{1}{2}(\text{Treatment-Pre} + \text{Treatment-Post})$$
+which means Treatment-Pre and Treatment-Post each get a weight of $-0.5$, and
+Treatment-Followup gets a weight of $+1$ (weights that define a contrast should always sum to
+0):
+
+```{r custom-contrast}
+custom_contrast_list <- list(
+  "Trt_Followup_vs_PrePostAvg" = c(0, -0.5, 0, -0.5, 0, 1)
+)
+contrast(emm_int, custom_contrast_list)
+```
+
+**A word of caution.** It is very easy to get a weight vector like this subtly wrong --
+swapping two adjacent weights, or forgetting that a level was dropped -- and `contrast()` will
+not warn you, because from `emmeans`'s point of view any vector that sums to zero is a
+perfectly legitimate contrast; it has no way of knowing that isn't the comparison you meant to
+ask about. Always print the reference grid immediately before writing your weights (as we did
+above) and double check your arithmetic against a hand calculation for at least one case. Here,
+for instance, we can confirm the estimate above by pulling the two Treatment-group means
+directly out of `emm_int` and subtracting by hand:
+
+```{r verify-custom-contrast}
+emm_df <- as.data.frame(emm_int)
+trt <- emm_df[emm_df$group == "Treatment", ]
+trt$emmean[trt$time == "Followup"] - mean(trt$emmean[trt$time %in% c("Pre", "Post")])
+```
+
+## 5.12. Visualizing Estimated Marginal Means
+
+A table of EMMs is useful, but a plot usually communicates the interaction pattern faster than
+any table can. `emmeans` provides `emmip()` (EMM interaction plot) for exactly this purpose,
+built on top of `ggplot2` so that it can be extended with the usual `ggplot2` layers:
+
+```{r emmip-plot, fig.align="center"}
+emmip(model_f5, group ~ time, CIs = TRUE, engine = "ggplot") +
+  theme_bw() +
+  labs(
+    title = "Estimated Marginal Means across Time and Group",
+    y = "Model-Predicted Outcome",
+    x = "Time Point"
+  )
+```
+
+## 5.13. Applying This to a Model You Already Have: Section 3 Revisited
+
+Everything above works exactly the same way on the mixed-factorial models we already built in
+Section 3 -- indeed, `mod3`/`mod3_sum` are the very models we used to demonstrate the
+coding issue at the start of this section:
+
+```{r reuse-section3}
+anova(mod3_sum)
+# note the statistically significant interaction term, justifying follow-up
+# post-hoc tests
+emm3 <- emmeans(mod3_sum, ~ age_group * condition)
+# Estimated Marginal Means for each cell:
+emm3
+
+# Simple effects: is the Age Group difference present in every condition,
+# or only some of them?
+pairs(emmeans(mod3_sum, ~ age_group | condition))
+```
+
+This shows that Older Adults are reliably slower than Younger Adults in every one of the three
+conditions (all three simple-effect comparisons are significant), which is a useful, concrete
+finding in its own right, and a good sanity check that the significant Age Group x Condition
+interaction we found in Section 3 reflects a difference in the *size* of the age gap across
+conditions, not a reversal of it.
+
+## Summary
+
+* `summary()` and `anova()`/`car::Anova()` answer different questions -- individual,
+  coding-dependent coefficients versus omnibus, term-level tests -- and it's worth knowing
+  which one you're looking at.
+* `lmerTest::anova()`'s omnibus tests are invariant to how you code *categorical* predictors,
+  in balanced and unbalanced designs alike; `car::Anova(type="III")` is not, and needs sum (or
+  polynomial) contrasts to agree with it once an interaction is present.
+* Centering matters even more, and for a different reason: any *continuous* covariate involved
+  in an interaction can distort the omnibus test of the other, lower-order term it interacts
+  with, in *any* of these functions, simply based on where its zero point happens to sit. This
+  can't be fixed by a contrasts option -- it has to be handled explicitly in your data (as
+  `year.0`/`year.c`/`time.c` already do throughout this repository).
+* Both problems have the same root cause: a Type III test of a lower-order term, in the
+  presence of an interaction, is implicitly a test "at" some reference point, and that
+  reference point is set by your coding/centering choices whether you intend it or not.
+* `emmeans` (for means and factor-level comparisons) and `emtrends` (for the slope of a
+  continuous predictor) sidestep this entirely, by making you name the reference point (or the
+  averaging scheme) explicitly -- which is why they give identical answers regardless of coding
+  or centering, even when the omnibus test built on the same model does not.
+* Use the `|` operator inside the reference-grid formula (e.g., `~ group | time`) to request
+  **simple effects** -- comparisons within one factor, holding another factor fixed -- and
+  always choose and report a multiple-comparison adjustment that matches how many comparisons
+  you are actually making.
+* Custom contrasts let you test a specific, pre-registered hypothesis directly, but the weight
+  vector must match the reference grid's cell order exactly -- print the grid and check your
+  arithmetic before trusting the result.
+
+## References
+Hoffmann, S., Lemster, S., Collins, G., Hapfelmeier, A., Heinze, G., Mayr, A., ... & Boulesteix, A. L. (2026). When to Adjust for Multiple Testing: A Unifying Guiding Principle. *Biometrical Journal*, 68(4), e70148. https://doi.org/10.1002/bimj.70148
+
+Kenward, M. G., & Roger, J. H. (1997). Small Sample Inference for Fixed Effects from
+Restricted Maximum Likelihood. *Biometrics, 53*(3), 983. https://doi.org/10.2307/2533558
+
+Lenth, R. V. (2016). Least-Squares Means: The R Package lsmeans. *Journal of Statistical Software*, 
+69(1), 1-33. https://doi.org/10.18637/jss.v069.i01
+
+Rothman, K. J. (1990). No adjustments are needed for multiple comparisons. *Epidemiology*, 1(1), 43-46. https://www.ovid.com/jnls/epidem/toc/1990/01000
+
+Schad, D. J., Vasishth, S., Hohenstein, S., & Kliegl, R. (2020). How to capitalize on a priori
+contrasts in linear (mixed) models: A tutorial. *Journal of Memory and Language, 110*, 104038.
+https://doi.org/10.1016/j.jml.2019.104038
+
+Venables, W. N., & Ripley, B. D. (1997). *Modern Applied Statistics with S-PLUS*. Springer.

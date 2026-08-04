@@ -8,18 +8,39 @@ output:
 ---
 
 Resources for implementing mixed-effects models for different designs.
+
+Sections 1-4 were part of the original repository accompanying our peer-reviewed manuscript
+(Lohse, Kozlowski, & Strube, 2023, *Communications in Kinesiology*) as supplementary material.
+These sections have since been revised for clarity and updated code, but the changes are
+minimal relative to the published version. Sections 5-9 are brand new additions, extending
+beyond the scope of the original manuscript, and were not part of the peer-reviewed material.
  
   1. **Section 01** - Introduction to Mixed-Effects Models
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html
  
-  2. **Section 02** - Mixed-Effect Models for Time Series Data
+  2. **Section 02** - Mixed-Effects Models for Longitudinal Data
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html
  
-  3. **Section 03** - Mixed-Effect Models for Factorial Designs
+  3. **Section 03** - Mixed-Effects Models for Factorial Designs
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html
  
-  4. **Section 04** - Models with Multiple Sources of Variance 
-      * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_multiple_sources.html)
+  4. **Section 04** - Mixed-Effect Models for Time Series within Factorial Designs
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html
+
+  5. **Section 05** - Fixed-Effect Coding, Centering, and Post-Hoc Contrasts with `emmeans`
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html
+
+  6. **Section 06** - Modeling Autocorrelation and Heteroscedasticity with `nlme`
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html
+
+  7. **Section 07** - Generalized Linear Mixed Models (GLMMs) for Non-Normal Data
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html
+
+  8. **Section 08** - Crossed Random Effects (Participants and Stimuli/Items)
+      * (Coming Soon)
+
+  9. **Section 09** - Model Diagnostics for Mixed-Effects Models
+      * (Coming Soon)
   
-  5. **Section n** - Further Readings and Recommendations
-      * (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)
+  10. **Further Readings and Recommendations**
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html

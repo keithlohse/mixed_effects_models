@@ -9,11 +9,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT" />
+<meta name="author" content="Keith Lohse, PhD, PStat" />
 
-<meta name="date" content="2022-10-04" />
+<meta name="date" content="2026-07-30" />
 
-<title>Applied Mixed-Effects Regresion Resources</title>
+<title>Section 5: Fixed-Effect Coding, Centering, and Post-Hoc Contrasts with emmeans</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1621,74 +1621,822 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Applied Mixed-Effects Regresion
-Resources</h1>
-<h4 class="author">Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan
-Kozlowksi, PhD, PT</h4>
-<h4 class="date">2022-10-04</h4>
+<h1 class="title toc-ignore">Section 5: Fixed-Effect Coding, Centering,
+and Post-Hoc Contrasts with <code>emmeans</code></h1>
+<h4 class="author">Keith Lohse, PhD, PStat</h4>
+<h4 class="date">2026-07-30</h4>
 
 </div>
 
 
-<p>Resources for implementing mixed-effects models for different
-designs.</p>
-<p>Sections 1-4 were part of the original repository accompanying our
-peer-reviewed manuscript (Lohse, Kozlowski, &amp; Strube, 2023,
-<em>Communications in Kinesiology</em>) as supplementary material. These
-sections have since been revised for clarity and updated code, but the
-changes are minimal relative to the published version. Sections 5-9 are
-brand new additions, extending beyond the scope of the original
-manuscript, and were not part of the peer-reviewed material.</p>
+<p>Every mixed-effects model we have built so far (Sections 1-4) has
+ended at the omnibus test: an F-value (or a set of F-values) telling us
+whether a main effect or interaction is “significant.” In practice, that
+is rarely the end of the story, and getting the follow-up questions
+right turns out to depend on something we have quietly glossed over
+until now: how R actually represents a categorical predictor as numbers,
+and where a continuous predictor’s zero point sits. This section works
+through both of those issues in detail – because they turn out to matter
+more, and in a more subtle way, than “use the default and it’ll be fine”
+– and then introduces the package, <code>emmeans</code>, that helps us
+sidestep complex issues related to how we coded our variables and focus
+on the comparisons we care about the most.</p>
+<div id="two-different-questions" class="section level2">
+<h2>5.1. Two Different Questions</h2>
+<p>Every fitted mixed model actually answers two related but distinct
+kinds of question, and it is worth being precise about which one you are
+asking at any given moment:</p>
+<ul>
+<li><strong><code>summary(model)</code></strong> gives you individual
+regression coefficients (<span class="math inline">\(\beta\)</span>’s)
+and their <span class="math inline">\(t\)</span>-tests. Each coefficient
+is a specific, named comparison (e.g., a difference from a reference
+level, or a slope for one specific group) and <em>which</em> comparison
+it represents depends entirely on how the predictor was coded.</li>
+<li><strong><code>anova(model)</code></strong> (or
+<code>car::Anova(model, type=&quot;III&quot;)</code>) gives you an omnibus <span class="math inline">\(F\)</span>-test (or, for GLMMs, a <span class="math inline">\(\chi^2\)</span> test) for a whole term at once
+(e.g., “does <code>condition</code>, as a whole, matter?”) collapsing
+across whichever specific comparisons happen to make up that term.</li>
+</ul>
+<p>You might reasonably expect the <em>omnibus</em> test, at least, to
+be immune to something as seemingly cosmetic as how a factor’s levels
+are coded. That expectation turns out to be only partly right, and the
+ways it fails causes real, reproducible confusion when a mixed-effects
+model doesn’t match what a repeated-measures ANOVA would have said, or
+when adding a covariate to a model unexpectedly changes an
+unrelated-looking <span class="math inline">\(p\)</span>-value.</p>
+</div>
+<div id="how-r-codes-categorical-predictors" class="section level2">
+<h2>5.2. How R Codes Categorical Predictors</h2>
+<p>By default, R represents an unordered factor using <strong>treatment
+(dummy) coding</strong>: one level is chosen as the reference
+(alphabetically first, unless you say otherwise), and every other level
+gets a column that is 1 for that level and 0 everywhere else. This is
+what has been happening, invisibly, in every model we’ve fit so far. Two
+alternatives come up constantly enough to be worth naming:</p>
+<ul>
+<li><strong>Sum (effects) coding</strong> (<code>contr.sum</code>): each
+non-reference level is coded relative to the <em>grand mean</em> rather
+than to one specific reference level, and the coefficients sum to zero
+across levels.</li>
+<li><strong>Polynomial (orthogonal) coding</strong>
+(<code>contr.poly</code>): built for <strong>ordered</strong> factors,
+decomposing the factor’s effect into linear, quadratic, cubic, etc.
+trend components. This is R’s own default for any factor you explicitly
+declare with <code>factor(..., ordered = TRUE)</code> – R’s global
+<code>options(&quot;contrasts&quot;)</code> setting is actually a <em>pair</em>,
+<code>c(&quot;contr.treatment&quot;, &quot;contr.poly&quot;)</code>: the first element
+governs unordered factors, the second governs ordered ones. You get
+polynomial contrasts automatically for an ordered factor without
+changing anything.</li>
+</ul>
+<p>All of these coding schemes describe the <em>same</em> fitted
+regression surface (i.e., they are just different bases for representing
+the same set of group differences) so it’s natural to assume the choice
+among them is purely cosmetic. But it gets more complicated than
+that…</p>
+</div>
+<div id="does-the-coding-scheme-change-the-omnibus-test" class="section level2">
+<h2>5.3. Does the Coding Scheme Change the Omnibus Test?</h2>
+<p>We’ll use the mixed-factorial model we already built in Section 3,
+Part 3
+(<code>mod3 &lt;- lmer(speed ~ age_group*condition + (1|subID), data=data_COND)</code>),
+refit under both coding schemes.</p>
+<pre class="r"><code>library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(car)
+library(emmeans)</code></pre>
+<pre class="r"><code>DATA &lt;- read.csv(&quot;https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_AGING_example.csv&quot;,
+                 stringsAsFactors = TRUE)
+data_COND &lt;- DATA %&gt;% group_by(subID, condition, age_group, group) %&gt;%
+  summarize(speed = mean(speed, na.rm = TRUE), .groups = &quot;drop&quot;) %&gt;%
+  arrange(age_group, subID, condition)</code></pre>
+<pre class="r"><code>options(contrasts = c(&quot;contr.treatment&quot;, &quot;contr.poly&quot;))  # R&#39;s default
+mod3_treat &lt;- lmer(speed ~ age_group*condition + (1|subID), data = data_COND, REML = TRUE)
+
+options(contrasts = c(&quot;contr.sum&quot;, &quot;contr.poly&quot;))
+mod3_sum &lt;- lmer(speed ~ age_group*condition + (1|subID), data = data_COND, REML = TRUE)
+
+cat(&quot;Treatment coding, lmerTest::anova():\n&quot;)</code></pre>
+<pre><code>## Treatment coding, lmerTest::anova():</code></pre>
+<pre class="r"><code>anova(mod3_treat)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"0.24387434","2":"0.24387434","3":"1","4":"38","5":"47.176032","6":"3.706668e-08","_rn_":"age_group"},{"1":"0.28195510","2":"0.14097755","3":"2","4":"76","5":"27.271263","6":"1.181245e-09","_rn_":"condition"},{"1":"0.05667469","2":"0.02833734","3":"2","4":"76","5":"5.481689","6":"5.972183e-03","_rn_":"age_group:condition"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>cat(&quot;\nSum coding, lmerTest::anova():\n&quot;)</code></pre>
+<pre><code>## 
+## Sum coding, lmerTest::anova():</code></pre>
+<pre class="r"><code>anova(mod3_sum)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"0.24387434","2":"0.24387434","3":"1","4":"38","5":"47.176032","6":"3.706668e-08","_rn_":"age_group"},{"1":"0.28195510","2":"0.14097755","3":"2","4":"76","5":"27.271263","6":"1.181245e-09","_rn_":"condition"},{"1":"0.05667469","2":"0.02833734","3":"2","4":"76","5":"5.481689","6":"5.972183e-03","_rn_":"age_group:condition"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>These match exactly, for every term, down to the decimal. That’s
+reassuring, and it’s the result we’ve implicitly been relying on every
+time we’ve run <code>anova()</code> in this repository so far. But watch
+what happens if we ask the same question a different way, using
+<code>car::Anova(type = &quot;III&quot;)</code> instead of
+<code>lmerTest::anova()</code> – a function we already used alongside
+<code>anova()</code> back in Section 2:</p>
+<pre class="r"><code>cat(&quot;Treatment coding, car::Anova(type=3):\n&quot;)</code></pre>
+<pre><code>## Treatment coding, car::Anova(type=3):</code></pre>
+<pre class="r"><code>car::Anova(mod3_treat, type = 3, test.statistic = &quot;F&quot;)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["F"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Df"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["Df.res"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[4],"type":["dbl"],"align":["right"]}],"data":[{"1":"689.500462","2":"1","3":"62.99267","4":"1.232252e-35","_rn_":"(Intercept)"},{"1":"57.147628","2":"1","3":"62.99267","4":"2.105232e-10","_rn_":"age_group"},{"1":"27.809108","2":"2","3":"76.00000","4":"8.647856e-10","_rn_":"condition"},{"1":"5.481689","2":"2","3":"76.00000","4":"5.972183e-03","_rn_":"age_group:condition"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>cat(&quot;\nSum coding, car::Anova(type=3):\n&quot;)</code></pre>
+<pre><code>## 
+## Sum coding, car::Anova(type=3):</code></pre>
+<pre class="r"><code>car::Anova(mod3_sum, type = 3, test.statistic = &quot;F&quot;)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["F"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Df"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["Df.res"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[4],"type":["dbl"],"align":["right"]}],"data":[{"1":"3001.012722","2":"1","3":"38","4":"9.031437e-38","_rn_":"(Intercept)"},{"1":"47.176029","2":"1","3":"38","4":"3.706669e-08","_rn_":"age_group"},{"1":"27.271263","2":"2","3":"76","4":"1.181245e-09","_rn_":"condition"},{"1":"5.481689","2":"2","3":"76","4":"5.972183e-03","_rn_":"age_group:condition"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Now <code>age_group</code> is genuinely different: F = 57.15 under
+treatment coding, F = 47.18 under sum coding – and the sum-coded number
+is the one that agrees with <code>lmerTest::anova()</code> above. This
+is not a small-sample or unbalanced-data artifact, either –
+<code>data_COND</code> is a perfectly balanced design (20 subjects per
+age group, equal cell sizes throughout), and the discrepancy still shows
+up. The reason is structural, not statistical:
+<code>car::Anova(type=3)</code>’s test for a lower-order term (like the
+main effect of <code>age_group</code>) is computed by dropping that
+term’s columns while holding the interaction’s columns fixed – and
+because the interaction’s columns are literally built by multiplying the
+main-effect columns together, <em>how</em> those main-effect columns
+were coded changes what “holding the interaction fixed” even means.
+Treatment coding’s columns are not centered (a reference level is coded
+0, not <span class="math inline">\(-0.5\)</span>), so they don’t have
+the orthogonality property that makes this comparison well-behaved; sum
+and polynomial coding’s columns do.</p>
+<p><code>lmerTest::anova()</code> computes its Type III test in a way
+that sidesteps the problem of how categorical factors are coded by
+effectively recoding our <em>categorical</em> factors “under the hood”
+based on the underlying cell-means structure. This is why our
+<code>anova()</code> outputs agreed regardless of coding and why nothing
+in Sections 1-4 broke despite never touching the default contrasts. When
+we switched to <code>car::Anova()</code> for out ANOVA tables, however,
+there is no implicit recoding of the categorical factors and the omnibus
+tests are sensitive to how we coded the variables.</p>
+<p>Additionally, if you introduce any imbalance into
+<code>data_COND</code> (unequal group sizes, missing cells),
+<code>lmerTest::anova()</code> continues to agree with itself under
+either coding scheme, while <code>car::Anova(type=3)</code> continues to
+require sum-style contrasts to match it. So the practical rule for
+<em>categorical</em> predictors is narrower than “always change your
+contrasts or everything breaks”: it’s specifically that
+<strong><code>car::Anova(type=&quot;III&quot;)</code> needs sum (or polynomial)
+contrasts to agree with what a factorial ANOVA – or
+<code>lmerTest::anova()</code> – would say</strong>, whenever an
+interaction is present. If you only ever use
+<code>lmerTest::anova()</code> for your omnibus tests, as this
+repository has so far, you have been safe by accident. It’s worth
+setting sum contrasts anyway, both for this reason and because (as we’ll
+see next) the coding of <em>categorical</em> factors does nothing to how
+<em>continuous</em> variables are represented in the model.</p>
+</div>
+<div id="continuous-covariates-centering-matters-even-more" class="section level2">
+<h2>5.4. Continuous Covariates: Centering Matters Even More</h2>
+<p>Contrast coding is a question specifically about <em>categorical</em>
+factors. A different, and in practice more consequential, version of the
+same underlying issue shows up whenever a <em>continuous</em> covariate
+is involved in an interaction – and no amount of
+<code>options(contrasts=)</code> fixes it, because there’s no factor and
+no contrast scheme involved at all. The relevant choice here is simply:
+where does the continuous variable’s zero point sit?</p>
+<p>To see how much this matters, we’ll simulate a small Group x Time
+growth-curve design – structurally identical to the models we built in
+Section 2, without any centering applied yet.</p>
+<pre class="r"><code>set.seed(99)
+n_sub &lt;- 40
+df_gt &lt;- expand.grid(subID = factor(1:n_sub), time = 1:4) %&gt;%
+  mutate(group = factor(if_else(as.numeric(subID) &lt;= n_sub/2, &quot;Control&quot;, &quot;Treatment&quot;)))
+
+sub_rfx &lt;- rnorm(n_sub, 0, 2); names(sub_rfx) &lt;- levels(df_gt$subID)
+df_gt &lt;- df_gt %&gt;%
+  mutate(score = 10 + 0.5*time + 2*(group==&quot;Treatment&quot;) + 1.2*time*(group==&quot;Treatment&quot;) +
+           sub_rfx[subID] + rnorm(n(), 0, 1),
+         time.c = time - mean(time))
+
+options(contrasts = c(&quot;contr.treatment&quot;, &quot;contr.poly&quot;))  # Group&#39;s coding is held fixed throughout</code></pre>
+<pre class="r"><code>m_uncentered &lt;- lmer(score ~ group * time   + (1 + time   | subID), data = df_gt)</code></pre>
+<pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
+<pre class="r"><code>m_centered   &lt;- lmer(score ~ group * time.c + (1 + time.c | subID), data = df_gt)</code></pre>
+<pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
+<pre class="r"><code>cat(&quot;Uncentered time, lmerTest::anova():\n&quot;)</code></pre>
+<pre><code>## Uncentered time, lmerTest::anova():</code></pre>
+<pre class="r"><code>anova(m_uncentered)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"14.87851","2":"14.87851","3":"1","4":"39.23531","5":"16.26833","6":"2.460143e-04","_rn_":"group"},{"1":"267.73240","2":"267.73240","3":"1","4":"117.37855","5":"292.74166","6":"1.124056e-33","_rn_":"time"},{"1":"50.13729","2":"50.13729","3":"1","4":"117.37855","5":"54.82069","6":"2.182239e-11","_rn_":"group:time"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>cat(&quot;\nCentered time.c, SAME Group coding, lmerTest::anova():\n&quot;)</code></pre>
+<pre><code>## 
+## Centered time.c, SAME Group coding, lmerTest::anova():</code></pre>
+<pre class="r"><code>anova(m_centered)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"62.53763","2":"62.53763","3":"1","4":"38.0000","5":"68.37928","6":"5.068918e-10","_rn_":"group"},{"1":"267.73236","2":"267.73236","3":"1","4":"117.3784","5":"292.74129","6":"1.124165e-33","_rn_":"time.c"},{"1":"50.13728","2":"50.13728","3":"1","4":"117.3784","5":"54.82062","6":"2.182304e-11","_rn_":"group:time.c"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Group’s coding never changed between these two models – it’s
+treatment coding both times. The <em>only</em> thing that changed is
+where <code>time</code> sits relative to zero, and the
+<code>group</code> test swings from F = 16.27 to F = 68.38.
+<code>time</code> and <code>group:time</code>, meanwhile, are identical
+in both models. We can see exactly why by looking at the correlation
+among the fixed-effect estimates:</p>
+<pre class="r"><code>cat(&quot;Uncentered model:\n&quot;)</code></pre>
+<pre><code>## Uncentered model:</code></pre>
+<pre class="r"><code>round(cov2cor(vcov(m_uncentered)), 3)</code></pre>
+<pre><code>## 4 x 4 Matrix of class &quot;corMatrix&quot;
+##                     (Intercept) groupTreatment   time groupTreatment:time
+## (Intercept)               1.000         -0.707 -0.471               0.333
+## groupTreatment           -0.707          1.000  0.333              -0.471
+## time                     -0.471          0.333  1.000              -0.707
+## groupTreatment:time       0.333         -0.471 -0.707               1.000</code></pre>
+<pre class="r"><code>cat(&quot;\nCentered model:\n&quot;)</code></pre>
+<pre><code>## 
+## Centered model:</code></pre>
+<pre class="r"><code>round(cov2cor(vcov(m_centered)), 3)</code></pre>
+<pre><code>## 4 x 4 Matrix of class &quot;corMatrix&quot;
+##                       (Intercept) groupTreatment time.c groupTreatment:time.c
+## (Intercept)                 1.000         -0.707 -0.034                 0.024
+## groupTreatment             -0.707          1.000  0.024                -0.034
+## time.c                     -0.034          0.024  1.000                -0.707
+## groupTreatment:time.c       0.024         -0.034 -0.707                 1.000</code></pre>
+<p>In the uncentered model, <code>group</code> and
+<code>group:time</code> are correlated at <span class="math inline">\(-0.47\)</span>; after centering, that drops to
+<span class="math inline">\(-0.03\)</span>. Uncentered,
+<code>time</code> never crosses zero, so the interaction column
+(<code>group</code> <span class="math inline">\(\times\)</span>
+<code>time</code>) is nearly a rescaled copy of the plain
+<code>group</code> column for any given subject – the two terms are
+fighting over the same variance, and the model can no longer cleanly
+attribute it to one or the other. This is precisely the collinearity
+mechanism discussed in Section 9’s diagnostics chapter, just showing up
+directly in an ANOVA table instead of a VIF number.</p>
+<p>This is not only a simulated-data phenomenon. Go back to Section 2’s
+own SCI data, which already builds <em>two</em> versions of the time
+variable – <code>year.0</code> (shifted so the first assessment is at
+time 0) and <code>year.c</code> (mean-centered via
+<code>scale()</code>).</p>
+<pre class="r"><code>DAT2 &lt;- read.csv(&quot;https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv&quot;,
+                 stringsAsFactors = TRUE)
+DAT2$year.0 &lt;- (DAT2$time - 1) / 12
+DAT2$year.c &lt;- as.numeric(scale(DAT2$time, scale = FALSE))
+
+m_yr0 &lt;- lmer(rasch_FIM ~ year.0 * AIS_grade + (1 + year.0 | subID), data = DAT2, REML = FALSE,
+              control = lmerControl(optimizer = &quot;bobyqa&quot;, optCtrl = list(maxfun = 5e5)))
+m_yrc &lt;- lmer(rasch_FIM ~ year.c * AIS_grade + (1 + year.c | subID), data = DAT2, REML = FALSE,
+              control = lmerControl(optimizer = &quot;bobyqa&quot;, optCtrl = list(maxfun = 5e5)))
+
+cat(&quot;year.0 (baseline-referenced), AIS_grade F-test:\n&quot;)</code></pre>
+<pre><code>## year.0 (baseline-referenced), AIS_grade F-test:</code></pre>
+<pre class="r"><code>anova(m_yr0)[&quot;AIS_grade&quot;, ]</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"1799.554","2":"899.7771","3":"2","4":"39.86491","5":"25.36188","6":"7.841814e-08","_rn_":"AIS_grade"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>cat(&quot;\nyear.c (mean-centered), AIS_grade F-test:\n&quot;)</code></pre>
+<pre><code>## 
+## year.c (mean-centered), AIS_grade F-test:</code></pre>
+<pre class="r"><code>anova(m_yrc)[&quot;AIS_grade&quot;, ]</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"1772.126","2":"886.0629","3":"2","4":"39.99983","5":"24.97532","6":"9.143736e-08","_rn_":"AIS_grade"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>The shift here is much smaller than in our synthetic example –
+<code>year.0</code>’s mean is only about 0.75 years away from zero, not
+a full two units like our simulated <code>time</code> – so the
+<code>AIS_grade</code> F-value only moves from about 25.4 to 25.0, not
+from 16 to 68. But it moves in exactly the same direction for exactly
+the same reason, on data you’ve already been using since Section 2. The
+size of the shift scales with how far the covariate’s typical values sit
+from zero relative to its own spread – which is exactly why the effect
+was dramatic in our synthetic example (<code>time</code> ranging
+narrowly from 1 to 4, nowhere near zero) and comparatively subtle
+here.</p>
+</div>
+<div id="why-this-happens-and-what-to-do-about-it" class="section level2">
+<h2>5.5. Why This Happens, and What to Do About It</h2>
+<p>Step back from the mechanics for a moment. What does “the main effect
+of Group” even mean, in a model that also contains a Group x Time
+interaction? Read literally, a Type III test of a lower-order term is
+asking: <em>does removing this term change the fit, holding the
+interaction fixed?</em> But “holding the interaction fixed” is only a
+well-posed question once you’ve fixed <em>where</em> the other variable
+in that interaction is sitting – at its reference level (if categorical)
+or at some specific value (if continuous). Treatment coding implicitly
+answers “at the reference level”; an uncentered continuous covariate
+implicitly answers “at zero,” wherever that happens to fall. Neither of
+those is a <em>wrong</em> answer, exactly – they’re perfectly valid,
+specific questions – but they are only sometimes the question that
+researchers want to ask. That is, researchers are often interested in
+<em>main effects</em> and <em>interactions</em>, not <em>simple
+effects</em> and interactions.</p>
+<ul>
+<li><p>A <em>main effect</em> asks about the effect of Variable A on
+average across all levels of Variable B – e.g., “does Group matter, on
+average, across the full range of Time we actually studied?” When Time
+is centered around it’s own mean and there is a Group x Time interaction
+in the model, then the effect of Group is “on average” across time
+because on average is when <code>Time = 0</code>.</p></li>
+<li><p>A *simple effect asks about the effect of Variable A at a
+specific level of Variable B – e.g, “does Group matter at the very first
+observation at the beginning of our study?” If the first observation is
+coded as 0 and a Group x Time interaction is included in the model, then
+the effect of Group is “at the beginning” because the intercept is when
+<code>Time = 0</code>.</p></li>
+</ul>
+<p>Two practical habits follow directly from this:</p>
 <ol style="list-style-type: decimal">
-<li><strong>Section 01</strong> - Introduction to Mixed-Effects Models
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html</a></li>
-</ul></li>
-<li><strong>Section 02</strong> - Mixed-Effects Models for Longitudinal
-Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html</a></li>
-</ul></li>
-<li><strong>Section 03</strong> - Mixed-Effects Models for Factorial
-Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html</a></li>
-</ul></li>
-<li><strong>Section 04</strong> - Mixed-Effect Models for Time Series
-within Factorial Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html</a></li>
-</ul></li>
-<li><strong>Section 05</strong> - Fixed-Effect Coding, Centering, and
-Post-Hoc Contrasts with <code>emmeans</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html</a></li>
-</ul></li>
-<li><strong>Section 06</strong> - Modeling Autocorrelation and
-Heteroscedasticity with <code>nlme</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html</a></li>
-</ul></li>
-<li><strong>Section 07</strong> - Generalized Linear Mixed Models
-(GLMMs) for Non-Normal Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html</a></li>
-</ul></li>
-<li><strong>Section 08</strong> - Crossed Random Effects (Participants
-and Stimuli/Items)
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Section 09</strong> - Model Diagnostics for Mixed-Effects
-Models
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Further Readings and Recommendations</strong>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html</a></li>
-</ul></li>
+<li><p><strong>For unordered categorical factors</strong>, set sum
+contrasts (<code>contr.sum</code>) rather than relying on the default.
+For genuinely <strong>ordered</strong> categorical factors with a small
+number of discrete levels (a 3-level dose, a small number of trial
+blocks treated as a factor), <code>contr.poly</code> is an even better
+choice, since polynomial contrasts are automatically mean-centered
+<em>and</em> mutually orthogonal – it solves both problems in this
+section at once, for that variable. In practice, that means setting:</p>
+<pre class="r"><code>options(contrasts = c(&quot;contr.sum&quot;, &quot;contr.poly&quot;))</code></pre>
+<p>which changes nothing for the omnibus tests you get from
+<code>lmerTest::anova()</code> (as we saw above), but <em>does</em>
+matter the moment you use <code>car::Anova()</code>, and makes every
+individual <code>summary()</code> coefficient a deviation from the grand
+mean rather than from an arbitrary reference level – generally the more
+useful default for interpretation once interactions are
+involved.</p></li>
+<li><p><strong>For continuous covariates that appear in any
+interaction</strong>, mean-center them explicitly (or choose some other
+meaningful, deliberate reference point) rather than leaving them on
+their raw scale. This is not something any <code>options()</code>
+setting can do for you, because there’s no factor and no contrast scheme
+involved – it has to happen in your data, as
+<code>year.0</code>/<code>year.c</code>/<code>time.c</code> already do
+throughout this repository. Do this by habit, before a diagnostic tool
+(like Section 9’s <code>check_collinearity()</code>) has to catch it for
+you.</p></li>
 </ol>
+</div>
+<div id="the-escape-hatch-let-emmeans-do-linear-algebra-for-you" class="section level2">
+<h2>5.6. The Escape Hatch: Let <code>emmeans</code> do linear algebra
+for you!</h2>
+<p>Fortunately, there a clean way to handle all of these issues, and
+it’s the reason this section exists. Instead of agonizing over how your
+coding and centering choices line up with the specific question you
+meant to ask, you can just ask the question directly, at a value (or
+averaged over values) that you name yourself. That is exactly what
+<code>emmeans</code> (for categorical predictors and factor levels) and
+its companion <code>emtrends</code> (for the <em>slope</em> of a
+continuous predictor) do – and because they work directly from the
+fitted regression surface rather than from any particular
+parameterization of it, they give the same answer regardless of how you
+coded or centered anything.</p>
+<p><em>To be clear</em> coding and centering are critically important to
+make sure we are getting the main-effects/interactions we want in an
+ANOVA table, or to make sure we are interpreting <code>summary()</code>
+output correctly. But regardless of the codes we used, we can always
+recover specific comparisons we want using <code>emmeans</code>.`</p>
+<p>We can check this directly, reusing the two Group x Time models we
+just built, which disagreed so sharply on their omnibus
+<code>group</code> test:</p>
+<pre class="r"><code>cat(&quot;Slope of time within each group -- UNCENTERED model:\n&quot;)</code></pre>
+<pre><code>## Slope of time within each group -- UNCENTERED model:</code></pre>
+<pre class="r"><code>emtrends(m_uncentered, ~ group, var = &quot;time&quot;)</code></pre>
+<pre><code>##  group     time.trend     SE df lower.CL upper.CL
+##  Control        0.657 0.0957 38    0.463     0.85
+##  Treatment      1.659 0.0957 38    1.465     1.85
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code>cat(&quot;\nSlope of time within each group -- CENTERED model:\n&quot;)</code></pre>
+<pre><code>## 
+## Slope of time within each group -- CENTERED model:</code></pre>
+<pre class="r"><code>emtrends(m_centered, ~ group, var = &quot;time.c&quot;)</code></pre>
+<pre><code>##  group     time.c.trend     SE df lower.CL upper.CL
+##  Control          0.657 0.0957 38    0.463     0.85
+##  Treatment        1.659 0.0957 38    1.465     1.85
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code>cat(&quot;Predicted score for each group AT time = 4 -- UNCENTERED model:\n&quot;)</code></pre>
+<pre><code>## Predicted score for each group AT time = 4 -- UNCENTERED model:</code></pre>
+<pre class="r"><code>emmeans(m_uncentered, ~ group, at = list(time = 4))</code></pre>
+<pre><code>## NOTE: Results may be misleading due to involvement in interactions</code></pre>
+<pre><code>##  group     emmean    SE df lower.CL upper.CL
+##  Control     11.5 0.495 38     10.5     12.5
+##  Treatment   18.6 0.495 38     17.6     19.6
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code>cat(&quot;\nPredicted score for each group AT the same real point -- CENTERED model:\n&quot;)</code></pre>
+<pre><code>## 
+## Predicted score for each group AT the same real point -- CENTERED model:</code></pre>
+<pre class="r"><code>emmeans(m_centered, ~ group, at = list(time.c = 4 - mean(1:4)))</code></pre>
+<pre><code>## NOTE: Results may be misleading due to involvement in interactions</code></pre>
+<pre><code>##  group     emmean    SE df lower.CL upper.CL
+##  Control     11.5 0.495 38     10.5     12.5
+##  Treatment   18.6 0.495 38     17.6     19.6
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<p>Identical, to the decimal, in both cases – despite the wildly
+different omnibus <code>group</code> <span class="math inline">\(F\)</span>-tests we found in Section 4 for these
+same two models. This is the real payoff of learning
+<code>emmeans</code>: it’s not merely a convenience for formatting
+post-hoc tables, it’s a way of asking your model a precisely-specified
+question (a slope, or a mean at a named point) that doesn’t inherit the
+ambiguity built into an omnibus test of a lower-order term. The rest of
+this section is about learning to use that tool well.</p>
+</div>
+<div id="a-quick-note-on-degrees-of-freedom" class="section level2">
+<h2>5.7. A Quick Note on Degrees of Freedom</h2>
+<p>Because mixed-effects models don’t have a single, clean residual
+degrees of freedom the way ordinary regression does (see the discussion
+of the Satterthwaite approximation in Section 1 and Section 3), every
+post-hoc test built on top of a mixed model has to make the same choice
+that the omnibus test did. <code>emmeans</code> gives you the same two
+options we’ve already seen:</p>
+<ul>
+<li><strong>Satterthwaite</strong>: the default in
+<code>lmerTest</code>, computationally cheap, and the same approximation
+you’ve already seen in Sections 1-4.</li>
+<li><strong>Kenward-Roger</strong>: adjusts the covariance matrix of the
+fixed effects for small-sample bias in addition to adjusting the degrees
+of freedom, which makes it a somewhat more conservative (and more
+computationally expensive) choice. It requires the <code>pbkrtest</code>
+package, which <code>emmeans</code> and <code>lmerTest</code> will use
+automatically if it is installed.</li>
+</ul>
+<p>For a single model, the two will typically agree quite closely; the
+difference matters most in small samples with a lot of missing data or
+unbalanced cell sizes.</p>
+</div>
+<div id="a-worked-example-a-2-group-x-3-time-design" class="section level2">
+<h2>5.8. A Worked Example: A 2 (Group) x 3 (Time) Design</h2>
+<p>To practice the mechanics of <code>emmeans</code> itself, we will
+simulate one more small data set: a hypothetical randomized controlled
+trial in which 50 participants (25 Control, 25 Treatment) were measured
+at three time points (Pre, Post, and a Followup session). This is a
+deliberately “clean,” fully-balanced design, distinct from the
+continuous-time example above, so that the reference-grid ordering and
+the custom-contrast weights below are easy to see.</p>
+<pre class="r"><code>options(contrasts = c(&quot;contr.sum&quot;, &quot;contr.poly&quot;))
+
+set.seed(42)
+n_per_group &lt;- 25
+subjects &lt;- factor(1:(n_per_group * 2))
+
+df_emmeans &lt;- expand.grid(
+  subID = subjects,
+  time  = factor(c(&quot;Pre&quot;, &quot;Post&quot;, &quot;Followup&quot;), levels = c(&quot;Pre&quot;, &quot;Post&quot;, &quot;Followup&quot;))
+) %&gt;%
+  mutate(
+    group = factor(if_else(as.numeric(subID) &lt;= n_per_group, &quot;Control&quot;, &quot;Treatment&quot;))
+  )
+
+sub_rfx &lt;- rnorm(n_per_group * 2, mean = 0, sd = 2.0)
+names(sub_rfx) &lt;- levels(subjects)
+
+df_emmeans &lt;- df_emmeans %&gt;%
+  mutate(
+    time_eff = case_when(time == &quot;Pre&quot; ~ 0, time == &quot;Post&quot; ~ -1.5, time == &quot;Followup&quot; ~ -2.0),
+    grp_eff  = if_else(group == &quot;Treatment&quot;, 0.5, -0.5),
+    int_eff  = case_when(
+      group == &quot;Treatment&quot; &amp; time == &quot;Post&quot; ~ -2.5,
+      group == &quot;Treatment&quot; &amp; time == &quot;Followup&quot; ~ -3.5,
+      TRUE ~ 0
+    ),
+    score = 10 + time_eff + grp_eff + int_eff + sub_rfx[subID] + rnorm(n(), 0, 1.2)
+  )</code></pre>
+<pre class="r"><code>model_f5 &lt;- lmer(score ~ group * time + (1 | subID), data = df_emmeans, REML = TRUE)
+
+# Omnibus Type III test, using Kenward-Roger degrees of freedom this time for variety
+anova(model_f5, type = 3, ddf = &quot;Kenward-Roger&quot;)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"10.96580","2":"10.96580","3":"1","4":"48","5":"8.636237","6":"5.053047e-03","_rn_":"group"},{"1":"420.64478","2":"210.32239","3":"2","4":"96","5":"165.641781","6":"7.492768e-32","_rn_":"time"},{"1":"78.58853","2":"39.29426","3":"2","4":"96","5":"30.946642","6":"4.241931e-11","_rn_":"group:time"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>The Group x Time interaction is significant, which tells us the
+Treatment effect is not constant across time – but it doesn’t tell us
+<em>where</em> the groups start to differ. That’s where
+<code>emmeans</code> comes in.</p>
+</div>
+<div id="estimated-marginal-means" class="section level2">
+<h2>5.9. Estimated Marginal Means</h2>
+<pre class="r"><code>emm_int &lt;- emmeans(model_f5, ~ group * time, lmer.df = &quot;Kenward-Roger&quot;)
+emm_int</code></pre>
+<pre><code>##  group     time     emmean    SE   df lower.CL upper.CL
+##  Control   Pre       10.05 0.505 63.1     9.04    11.05
+##  Treatment Pre       10.05 0.505 63.1     9.04    11.06
+##  Control   Post       8.21 0.505 63.1     7.20     9.21
+##  Treatment Post       5.79 0.505 63.1     4.78     6.80
+##  Control   Followup   7.87 0.505 63.1     6.87     8.88
+##  Treatment Followup   4.43 0.505 63.1     3.42     5.43
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<p>This table is the heart of everything that follows: it is the model’s
+best estimate of the mean score in each of the six Group x Time cells,
+each with its own standard error and confidence interval, all computed
+on a balanced grid directly from <code>model_f5</code>’s fixed effects
+(marginalizing over the random intercept for subject). Every contrast we
+compute below is just a weighted combination of these six numbers.</p>
+</div>
+<div id="pairwise-post-hoc-comparisons" class="section level2">
+<h2>5.10. Pairwise Post-Hoc Comparisons</h2>
+<div id="all-pairwise-comparisons-tukey-corrected" class="section level3">
+<h3>5.10.1 All Pairwise Comparisons (Tukey-Corrected)</h3>
+<p>If we genuinely want to compare every cell to every other cell (all
+<span class="math inline">\(\binom{6}{2}=15\)</span> pairs), we should
+control the familywise error rate across all 15 tests. The Tukey HSD
+adjustment is the reasonable choice for this “compare everything to
+everything” situation:</p>
+<pre class="r"><code>pairs_all &lt;- contrast(emm_int, method = &quot;pairwise&quot;, adjust = &quot;tukey&quot;)
+summary(pairs_all)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["contrast"],"name":[1],"type":["chr"],"align":["left"]},{"label":["estimate"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["SE"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["df"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["t.ratio"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["p.value"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"Control Pre - Treatment Pre","2":"-0.006269091","3":"0.7135935","4":"63.112","5":"-0.00878524","6":"1.000000e+00","_rn_":"1"},{"1":"Control Pre - Control Post","2":"1.840782440","3":"0.3187152","4":"96.000","5":"5.77563397","6":"1.395569e-06","_rn_":"2"},{"1":"Control Pre - Treatment Post","2":"4.257634474","3":"0.7135935","4":"63.112","5":"5.96647002","6":"1.765408e-06","_rn_":"3"},{"1":"Control Pre - Control Followup","2":"2.172473941","3":"0.3187152","4":"96.000","5":"6.81634832","6":"1.271612e-08","_rn_":"4"},{"1":"Control Pre - Treatment Followup","2":"5.619859541","3":"0.7135935","4":"63.112","5":"7.87543499","6":"8.837361e-10","_rn_":"5"},{"1":"Treatment Pre - Control Post","2":"1.847051530","3":"0.7135935","4":"63.112","5":"2.58838039","6":"1.152763e-01","_rn_":"6"},{"1":"Treatment Pre - Treatment Post","2":"4.263903565","3":"0.3187152","4":"96.000","5":"13.37841221","6":"4.281233e-10","_rn_":"7"},{"1":"Treatment Pre - Control Followup","2":"2.178743031","3":"0.7135935","4":"63.112","5":"3.05319892","6":"3.722165e-02","_rn_":"8"},{"1":"Treatment Pre - Treatment Followup","2":"5.626128632","3":"0.3187152","4":"96.000","5":"17.65252587","6":"4.281229e-10","_rn_":"9"},{"1":"Control Post - Treatment Post","2":"2.416852035","3":"0.7135935","4":"63.112","5":"3.38687487","6":"1.481205e-02","_rn_":"10"},{"1":"Control Post - Control Followup","2":"0.331691501","3":"0.3187152","4":"96.000","5":"1.04071435","6":"9.029093e-01","_rn_":"11"},{"1":"Control Post - Treatment Followup","2":"3.779077102","3":"0.7135935","4":"63.112","5":"5.29583983","6":"2.303284e-05","_rn_":"12"},{"1":"Treatment Post - Control Followup","2":"-2.085160534","3":"0.7135935","4":"63.112","5":"-2.92205634","6":"5.220076e-02","_rn_":"13"},{"1":"Treatment Post - Treatment Followup","2":"1.362225067","3":"0.3187152","4":"96.000","5":"4.27411366","6":"6.307124e-04","_rn_":"14"},{"1":"Control Followup - Treatment Followup","2":"3.447385601","3":"0.7135935","4":"63.112","5":"4.83102130","6":"1.277960e-04","_rn_":"15"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Fifteen tests is a lot to look at, and most of them are not actually
+questions we set out to ask (do we really care whether Control-Pre
+differs from Treatment-Followup?). In practice, a more targeted set of
+comparisons – driven by our actual hypotheses – is usually more useful,
+and lets us use a less conservative correction because we are testing
+fewer, more specific things (e.g., see my video on stategies for
+post-hoc testing: <a href="https://www.youtube.com/watch?v=Qr1hxsMIGck" class="uri">https://www.youtube.com/watch?v=Qr1hxsMIGck</a>).</p>
+</div>
+<div id="simple-effects-comparing-groups-at-each-time-point" class="section level3">
+<h3>5.10.2 Simple Effects: Comparing Groups at Each Time Point</h3>
+<p>Our first real question is: at which time point(s) do Control and
+Treatment actually differ? This calls for comparing <code>group</code>
+<em>within</em> each level of <code>time</code> – what is often called a
+test of <strong>simple effects</strong>. We ask <code>emmeans</code> for
+this directly with the <code>|</code> (conditioning) operator:</p>
+<pre class="r"><code>emm_by_time &lt;- emmeans(model_f5, ~ group | time)
+pairs_by_time &lt;- pairs(emm_by_time, adjust = &quot;sidak&quot;)
+pairs_by_time</code></pre>
+<pre><code>## time = Pre:
+##  contrast            estimate    SE   df t.ratio p.value
+##  Control - Treatment -0.00627 0.714 63.1  -0.009  0.9930
+## 
+## time = Post:
+##  contrast            estimate    SE   df t.ratio p.value
+##  Control - Treatment  2.41685 0.714 63.1   3.387  0.0012
+## 
+## time = Followup:
+##  contrast            estimate    SE   df t.ratio p.value
+##  Control - Treatment  3.44739 0.714 63.1   4.831  &lt;.0001
+## 
+## Degrees-of-freedom method: kenward-roger</code></pre>
+<p>Because we are only running three tests here (one per time point),
+the Sidak correction – slightly less conservative than Tukey’s HSD – is
+a reasonable choice, appropriate for a small pre-specified family of
+comparisons. The pattern is exactly what the interaction term predicted:
+the groups do not differ at baseline (as they shouldn’t, since
+participants were randomized before treatment began), and a
+Control-Treatment gap opens up by the Post assessment and grows larger
+by Followup.</p>
+</div>
+<div id="simple-effects-comparing-time-points-within-each-group" class="section level3">
+<h3>5.10.3 Simple Effects: Comparing Time Points Within Each Group</h3>
+<p>We can just as easily flip the conditioning around and ask whether
+each group changes over time on its own:</p>
+<pre class="r"><code>emm_by_group &lt;- emmeans(model_f5, ~ time | group)
+pairs_by_group &lt;- pairs(emm_by_group, adjust = &quot;holm&quot;)
+pairs_by_group</code></pre>
+<pre><code>## group = Control:
+##  contrast        estimate    SE df t.ratio p.value
+##  Pre - Post         1.841 0.319 96   5.776  &lt;.0001
+##  Pre - Followup     2.172 0.319 96   6.816  &lt;.0001
+##  Post - Followup    0.332 0.319 96   1.041  0.3006
+## 
+## group = Treatment:
+##  contrast        estimate    SE df t.ratio p.value
+##  Pre - Post         4.264 0.319 96  13.378  &lt;.0001
+##  Pre - Followup     5.626 0.319 96  17.653  &lt;.0001
+##  Post - Followup    1.362 0.319 96   4.274  &lt;.0001
+## 
+## Degrees-of-freedom method: kenward-roger 
+## P value adjustment: holm method for 3 tests</code></pre>
+<p>Here we’ve used the Holm correction instead of Sidak, mostly to
+illustrate that <code>emmeans</code> supports several standard
+adjustment methods (<code>&quot;tukey&quot;</code>, <code>&quot;sidak&quot;</code>,
+<code>&quot;holm&quot;</code>, <code>&quot;bonferroni&quot;</code>, <code>&quot;fdr&quot;</code>, and
+<code>&quot;none&quot;</code> among others) and you should pick the one that
+matches how conservative you want to be, not just default to whichever
+one you saw in the last paper you read. Personally, I err on the side of
+not correcting, <em>but</em> transparently reporting all tests (see:
+Rothman, 1990; Hoffman et al., 2026). I like this approach because it
+allows readers to decide how conservative they want to be, but that sort
+of subjectivity is not always desirable when statistical significance is
+being employed for decision making.</p>
+</div>
+</div>
+<div id="custom-contrasts" class="section level2">
+<h2>5.11. Custom Contrasts</h2>
+<p>Sometimes none of the “off-the-shelf” comparisons above are quite the
+question we actually want to ask. Suppose our real, pre-registered
+hypothesis was narrower than “do all time points differ”: we
+specifically expected that <strong>the Treatment group’s Followup score
+would be lower than the average of its own Pre and Post scores</strong>
+(i.e., that any initial treatment gains would be maintained, not
+reversed, by Followup). We can build that exact contrast by hand.</p>
+<p>The key to writing a custom contrast is knowing the <em>order</em>
+that <code>emm_int</code> lists its cells in, because that is the order
+your weights need to line up with:</p>
+<pre class="r"><code>emm_int</code></pre>
+<pre><code>##  group     time     emmean    SE   df lower.CL upper.CL
+##  Control   Pre       10.05 0.505 63.1     9.04    11.05
+##  Treatment Pre       10.05 0.505 63.1     9.04    11.06
+##  Control   Post       8.21 0.505 63.1     7.20     9.21
+##  Treatment Post       5.79 0.505 63.1     4.78     6.80
+##  Control   Followup   7.87 0.505 63.1     6.87     8.88
+##  Treatment Followup   4.43 0.505 63.1     3.42     5.43
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<p>The grid above lists the six cells in this order: Control-Pre,
+Treatment-Pre, Control-Post, Treatment-Post, Control-Followup,
+Treatment-Followup. Our hypothesis only involves the Treatment group, so
+every “Control” cell gets a weight of 0, and we want: <span class="math display">\[\text{Treatment-Followup} -
+\tfrac{1}{2}(\text{Treatment-Pre} + \text{Treatment-Post})\]</span>
+which means Treatment-Pre and Treatment-Post each get a weight of <span class="math inline">\(-0.5\)</span>, and Treatment-Followup gets a
+weight of <span class="math inline">\(+1\)</span> (weights that define a
+contrast should always sum to 0):</p>
+<pre class="r"><code>custom_contrast_list &lt;- list(
+  &quot;Trt_Followup_vs_PrePostAvg&quot; = c(0, -0.5, 0, -0.5, 0, 1)
+)
+contrast(emm_int, custom_contrast_list)</code></pre>
+<pre><code>##  contrast                   estimate    SE df t.ratio p.value
+##  Trt_Followup_vs_PrePostAvg    -3.49 0.276 96 -12.659  &lt;.0001
+## 
+## Degrees-of-freedom method: kenward-roger</code></pre>
+<p><strong>A word of caution.</strong> It is very easy to get a weight
+vector like this subtly wrong – swapping two adjacent weights, or
+forgetting that a level was dropped – and <code>contrast()</code> will
+not warn you, because from <code>emmeans</code>’s point of view any
+vector that sums to zero is a perfectly legitimate contrast; it has no
+way of knowing that isn’t the comparison you meant to ask about. Always
+print the reference grid immediately before writing your weights (as we
+did above) and double check your arithmetic against a hand calculation
+for at least one case. Here, for instance, we can confirm the estimate
+above by pulling the two Treatment-group means directly out of
+<code>emm_int</code> and subtracting by hand:</p>
+<pre class="r"><code>emm_df &lt;- as.data.frame(emm_int)
+trt &lt;- emm_df[emm_df$group == &quot;Treatment&quot;, ]
+trt$emmean[trt$time == &quot;Followup&quot;] - mean(trt$emmean[trt$time %in% c(&quot;Pre&quot;, &quot;Post&quot;)])</code></pre>
+<pre><code>## [1] -3.494177</code></pre>
+</div>
+<div id="visualizing-estimated-marginal-means" class="section level2">
+<h2>5.12. Visualizing Estimated Marginal Means</h2>
+<p>A table of EMMs is useful, but a plot usually communicates the
+interaction pattern faster than any table can. <code>emmeans</code>
+provides <code>emmip()</code> (EMM interaction plot) for exactly this
+purpose, built on top of <code>ggplot2</code> so that it can be extended
+with the usual <code>ggplot2</code> layers:</p>
+<pre class="r"><code>emmip(model_f5, group ~ time, CIs = TRUE, engine = &quot;ggplot&quot;) +
+  theme_bw() +
+  labs(
+    title = &quot;Estimated Marginal Means across Time and Group&quot;,
+    y = &quot;Model-Predicted Outcome&quot;,
+    x = &quot;Time Point&quot;
+  )</code></pre>
+<pre><code>## Warning: `aes_()` was deprecated in ggplot2 3.0.0.
+## ℹ Please use tidy evaluation idioms with `aes()`
+## ℹ The deprecated feature was likely used in the emmeans package.
+##   Please report the issue at &lt;https://github.com/rvlenth/emmeans/issues&gt;.
+## This warning is displayed once per session.
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.</code></pre>
+<p><img role="img" src="data:image/png;base64,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roDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCIp4dAbdCLEYFaIa6AwIinh0Bt0IsRgVohroDAiKeHQG3QixGBWiGugMCI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" width="672" style="display: block; margin: auto;" /></p>
+</div>
+<div id="applying-this-to-a-model-you-already-have-section-3-revisited" class="section level2">
+<h2>5.13. Applying This to a Model You Already Have: Section 3
+Revisited</h2>
+<p>Everything above works exactly the same way on the mixed-factorial
+models we already built in Section 3 – indeed,
+<code>mod3</code>/<code>mod3_sum</code> are the very models we used to
+demonstrate the coding issue at the start of this section:</p>
+<pre class="r"><code>anova(mod3_sum)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"0.24387434","2":"0.24387434","3":"1","4":"38","5":"47.176032","6":"3.706668e-08","_rn_":"age_group"},{"1":"0.28195510","2":"0.14097755","3":"2","4":"76","5":"27.271263","6":"1.181245e-09","_rn_":"condition"},{"1":"0.05667469","2":"0.02833734","3":"2","4":"76","5":"5.481689","6":"5.972183e-03","_rn_":"age_group:condition"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code># note the statistically significant interaction term, justifying follow-up
+# post-hoc tests
+emm3 &lt;- emmeans(mod3_sum, ~ age_group * condition)
+# Estimated Marginal Means for each cell:
+emm3</code></pre>
+<pre><code>##  age_group condition emmean     SE df lower.CL upper.CL
+##  OA        A          0.700 0.0267 63    0.647    0.753
+##  YA        A          0.985 0.0267 63    0.932    1.038
+##  OA        B          0.870 0.0267 63    0.816    0.923
+##  YA        B          1.052 0.0267 63    0.999    1.105
+##  OA        C          0.789 0.0267 63    0.735    0.842
+##  YA        C          0.997 0.0267 63    0.944    1.051
+## 
+## Degrees-of-freedom method: kenward-roger 
+## Confidence level used: 0.95</code></pre>
+<pre class="r"><code># Simple effects: is the Age Group difference present in every condition,
+# or only some of them?
+pairs(emmeans(mod3_sum, ~ age_group | condition))</code></pre>
+<pre><code>## condition = A:
+##  contrast estimate     SE df t.ratio p.value
+##  OA - YA    -0.285 0.0377 63  -7.560  &lt;.0001
+## 
+## condition = B:
+##  contrast estimate     SE df t.ratio p.value
+##  OA - YA    -0.183 0.0377 63  -4.844  &lt;.0001
+## 
+## condition = C:
+##  contrast estimate     SE df t.ratio p.value
+##  OA - YA    -0.208 0.0377 63  -5.530  &lt;.0001
+## 
+## Degrees-of-freedom method: kenward-roger</code></pre>
+<p>This shows that Older Adults are reliably slower than Younger Adults
+in every one of the three conditions (all three simple-effect
+comparisons are significant), which is a useful, concrete finding in its
+own right, and a good sanity check that the significant Age Group x
+Condition interaction we found in Section 3 reflects a difference in the
+<em>size</em> of the age gap across conditions, not a reversal of
+it.</p>
+</div>
+<div id="summary" class="section level2">
+<h2>Summary</h2>
+<ul>
+<li><code>summary()</code> and
+<code>anova()</code>/<code>car::Anova()</code> answer different
+questions – individual, coding-dependent coefficients versus omnibus,
+term-level tests – and it’s worth knowing which one you’re looking
+at.</li>
+<li><code>lmerTest::anova()</code>’s omnibus tests are invariant to how
+you code <em>categorical</em> predictors, in balanced and unbalanced
+designs alike; <code>car::Anova(type=&quot;III&quot;)</code> is not, and needs sum
+(or polynomial) contrasts to agree with it once an interaction is
+present.</li>
+<li>Centering matters even more, and for a different reason: any
+<em>continuous</em> covariate involved in an interaction can distort the
+omnibus test of the other, lower-order term it interacts with, in
+<em>any</em> of these functions, simply based on where its zero point
+happens to sit. This can’t be fixed by a contrasts option – it has to be
+handled explicitly in your data (as
+<code>year.0</code>/<code>year.c</code>/<code>time.c</code> already do
+throughout this repository).</li>
+<li>Both problems have the same root cause: a Type III test of a
+lower-order term, in the presence of an interaction, is implicitly a
+test “at” some reference point, and that reference point is set by your
+coding/centering choices whether you intend it or not.</li>
+<li><code>emmeans</code> (for means and factor-level comparisons) and
+<code>emtrends</code> (for the slope of a continuous predictor) sidestep
+this entirely, by making you name the reference point (or the averaging
+scheme) explicitly – which is why they give identical answers regardless
+of coding or centering, even when the omnibus test built on the same
+model does not.</li>
+<li>Use the <code>|</code> operator inside the reference-grid formula
+(e.g., <code>~ group | time</code>) to request <strong>simple
+effects</strong> – comparisons within one factor, holding another factor
+fixed – and always choose and report a multiple-comparison adjustment
+that matches how many comparisons you are actually making.</li>
+<li>Custom contrasts let you test a specific, pre-registered hypothesis
+directly, but the weight vector must match the reference grid’s cell
+order exactly – print the grid and check your arithmetic before trusting
+the result.</li>
+</ul>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Hoffmann, S., Lemster, S., Collins, G., Hapfelmeier, A., Heinze, G.,
+Mayr, A., … &amp; Boulesteix, A. L. (2026). When to Adjust for Multiple
+Testing: A Unifying Guiding Principle. <em>Biometrical Journal</em>,
+68(4), e70148. <a href="https://doi.org/10.1002/bimj.70148" class="uri">https://doi.org/10.1002/bimj.70148</a></p>
+<p>Kenward, M. G., &amp; Roger, J. H. (1997). Small Sample Inference for
+Fixed Effects from Restricted Maximum Likelihood. <em>Biometrics,
+53</em>(3), 983. <a href="https://doi.org/10.2307/2533558" class="uri">https://doi.org/10.2307/2533558</a></p>
+<p>Lenth, R. V. (2016). Least-Squares Means: The R Package lsmeans.
+<em>Journal of Statistical Software</em>, 69(1), 1-33. <a href="https://doi.org/10.18637/jss.v069.i01" class="uri">https://doi.org/10.18637/jss.v069.i01</a></p>
+<p>Rothman, K. J. (1990). No adjustments are needed for multiple
+comparisons. <em>Epidemiology</em>, 1(1), 43-46. <a href="https://www.ovid.com/jnls/epidem/toc/1990/01000" class="uri">https://www.ovid.com/jnls/epidem/toc/1990/01000</a></p>
+<p>Schad, D. J., Vasishth, S., Hohenstein, S., &amp; Kliegl, R. (2020).
+How to capitalize on a priori contrasts in linear (mixed) models: A
+tutorial. <em>Journal of Memory and Language, 110</em>, 104038. <a href="https://doi.org/10.1016/j.jml.2019.104038" class="uri">https://doi.org/10.1016/j.jml.2019.104038</a></p>
+<p>Venables, W. N., &amp; Ripley, B. D. (1997). <em>Modern Applied
+Statistics with S-PLUS</em>. Springer.</p>
+</div>
 
 
 

@@ -9,11 +9,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT" />
+<meta name="author" content="Keith Lohse, PhD, PStat" />
 
-<meta name="date" content="2022-10-04" />
+<meta name="date" content="2026-08-04" />
 
-<title>Applied Mixed-Effects Regresion Resources</title>
+<title>Section 7: Generalized Linear Mixed Models (GLMMs) for Non-Normal Data</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1621,74 +1621,346 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Applied Mixed-Effects Regresion
-Resources</h1>
-<h4 class="author">Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan
-Kozlowksi, PhD, PT</h4>
-<h4 class="date">2022-10-04</h4>
+<h1 class="title toc-ignore">Section 7: Generalized Linear Mixed Models
+(GLMMs) for Non-Normal Data</h1>
+<h4 class="author">Keith Lohse, PhD, PStat</h4>
+<h4 class="date">2026-08-04</h4>
 
 </div>
 
 
-<p>Resources for implementing mixed-effects models for different
-designs.</p>
-<p>Sections 1-4 were part of the original repository accompanying our
-peer-reviewed manuscript (Lohse, Kozlowski, &amp; Strube, 2023,
-<em>Communications in Kinesiology</em>) as supplementary material. These
-sections have since been revised for clarity and updated code, but the
-changes are minimal relative to the published version. Sections 5-9 are
-brand new additions, extending beyond the scope of the original
-manuscript, and were not part of the peer-reviewed material.</p>
+<p>Every outcome we have modeled so far in this repository – gait speed,
+functional independence, response time – has been a continuous measure
+that we were comfortable treating as approximately normally distributed.
+Not every outcome in rehabilitation or movement science looks like that.
+Did the participant fall or not (binary)? How many falls did they have
+in a month (a count)? What proportion of trials did they complete
+successfully (a proportion)? For outcomes like these, a standard linear
+mixed model (LMM) runs into three related problems:</p>
 <ol style="list-style-type: decimal">
-<li><strong>Section 01</strong> - Introduction to Mixed-Effects Models
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html</a></li>
-</ul></li>
-<li><strong>Section 02</strong> - Mixed-Effects Models for Longitudinal
-Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html</a></li>
-</ul></li>
-<li><strong>Section 03</strong> - Mixed-Effects Models for Factorial
-Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html</a></li>
-</ul></li>
-<li><strong>Section 04</strong> - Mixed-Effect Models for Time Series
-within Factorial Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html</a></li>
-</ul></li>
-<li><strong>Section 05</strong> - Fixed-Effect Coding, Centering, and
-Post-Hoc Contrasts with <code>emmeans</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html</a></li>
-</ul></li>
-<li><strong>Section 06</strong> - Modeling Autocorrelation and
-Heteroscedasticity with <code>nlme</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html</a></li>
-</ul></li>
-<li><strong>Section 07</strong> - Generalized Linear Mixed Models
-(GLMMs) for Non-Normal Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html</a></li>
-</ul></li>
-<li><strong>Section 08</strong> - Crossed Random Effects (Participants
-and Stimuli/Items)
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Section 09</strong> - Model Diagnostics for Mixed-Effects
-Models
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Further Readings and Recommendations</strong>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html</a></li>
-</ul></li>
+<li>The residuals are structurally non-normal (a binary outcome can only
+have two possible residual values at any given predicted
+probability).</li>
+<li>The variance of the outcome is mathematically tied to its mean (for
+a binomial outcome, <span class="math inline">\(\text{Var}(Y) =
+np(1-p)\)</span>; for a Poisson-distributed count, <span class="math inline">\(\text{Var}(Y) = \mu\)</span>), so “homogeneity of
+variance” isn’t a reasonable assumption.</li>
+<li>A linear model’s predictions are unbounded, so it will happily
+predict a probability of 1.3 or a count of <span class="math inline">\(-4\)</span>, both of which are impossible.
+Certainly we might allow for some flexibility here - “interval-like”
+data - but at a certain point we are better served by changing gears and
+adopting a new model.</li>
 </ol>
+<p><strong>Generalized Linear Mixed Models (GLMMs)</strong> solve all
+three problems the same way a standard generalized linear model (GLM)
+does: by combining a <strong>link function</strong> <span class="math inline">\(g(\cdot)\)</span> that maps the (bounded) mean of
+the outcome onto an (unbounded) linear predictor, with a probability
+distribution from the exponential family whose variance is allowed to
+depend on its mean in whatever way that distribution requires: <span class="math display">\[g(\mu_{ij}) = \mathbf{X}_{ij} \boldsymbol{\beta}
++ \mathbf{Z}_{ij} \mathbf{b}_i\]</span> where <span class="math inline">\(\mu_{ij} = \mathbb{E}[Y_{ij} \mid
+\mathbf{b}_i]\)</span> is the conditional mean given the random effects.
+Everything you already know about specifying fixed and random effects
+from Sections 1-4 carries over unchanged; what’s new is the choice of
+link function and distribution family.</p>
+<div id="why-glmmtmb-instead-of-lme4glmer" class="section level2">
+<h2>7.1. Why <code>glmmTMB</code> Instead of
+<code>lme4::glmer</code>?</h2>
+<p><code>lme4::glmer()</code> is a perfectly good tool for standard
+binomial and Poisson GLMMs, and if that is all you need, there is no
+reason to add another package to your workflow. We use
+<code>glmmTMB</code> in this section because rehabilitation and clinical
+outcome data very often need three things <code>glmer()</code> doesn’t
+provide:</p>
+<ul>
+<li><strong>Overdispersion-aware count families</strong>: native
+negative binomial distributions (<code>nbinom1</code> and
+<code>nbinom2</code>), for count data whose variance grows faster than
+its mean – which happen for things like symptom counts, fall counts, or
+hospital visits.</li>
+<li><strong>Zero inflation</strong>: a separate model
+(<code>ziformula = ~ ...</code>) for “structural” zeros that arise from
+a different process than the count process itself (e.g., athletes who
+missed 0 days due to injury are probably those that <em>never got
+injured</em>, so 0 versus 1 is a <em>qualitative</em> difference,
+whereas 1 versus 2 is a quantitative difference).</li>
+<li><strong>Modeling the dispersion itself</strong>:
+<code>dispformula = ~ ...</code> lets the residual variance change
+systematically across groups or covariates, similar in spirit to the
+<code>varIdent()</code> structures we saw for continuous outcomes in
+Section 6.</li>
+</ul>
+<p><code>glmmTMB</code> is built on Template Model Builder (C++ with
+automatic differentiation), which also tends to make it faster than
+<code>glmer()</code> for complex random-effects structures, though for
+the simple examples in this section speed is not the deciding
+factor.</p>
+<hr />
+</div>
+<div id="example-1-a-binary-logistic-glmm" class="section level2">
+<h2>2. Example 1: A Binary Logistic GLMM</h2>
+<p>Consider a hypothetical between-subjects experiment: 40 participants
+were randomized to either a Control or a Treatment condition, and each
+participant completed 20 trials of a task, with a binary success/failure
+outcome on each trial.</p>
+<pre class="r"><code>library(tidyverse)
+library(glmmTMB)
+library(emmeans)
+library(performance)</code></pre>
+<pre class="r"><code>set.seed(101)
+n_sub &lt;- 40
+n_trials &lt;- 20
+
+df_bin &lt;- expand.grid(
+  subID = factor(1:n_sub),
+  trial = 1:n_trials
+) %&gt;%
+  mutate(
+    condition = factor(if_else(as.numeric(subID) &lt;= n_sub / 2, &quot;Control&quot;, &quot;Treatment&quot;))
+  )
+
+sub_intercepts_logit &lt;- rnorm(n_sub, mean = 0, sd = 1.2)
+
+df_bin &lt;- df_bin %&gt;%
+  mutate(
+    logit_p = -0.5 + 1.2 * (condition == &quot;Treatment&quot;) + sub_intercepts_logit[subID],
+    prob    = 1 / (1 + exp(-logit_p)),
+    success = rbinom(n(), size = 1, prob = prob)
+  )</code></pre>
+<pre class="r"><code>mod_bin_tmb &lt;- glmmTMB(
+  success ~ condition + (1 | subID),
+  data   = df_bin,
+  family = binomial(link = &quot;logit&quot;)
+)
+
+summary(mod_bin_tmb)</code></pre>
+<pre><code>##  Family: binomial  ( logit )
+## Formula:          success ~ condition + (1 | subID)
+## Data: df_bin
+## 
+##       AIC       BIC    logLik -2*log(L)  df.resid 
+##     950.2     964.2    -472.1     944.2       797 
+## 
+## Random effects:
+## 
+## Conditional model:
+##  Groups Name        Variance Std.Dev.
+##  subID  (Intercept) 1.094    1.046   
+## Number of obs: 800, groups:  subID, 40
+## 
+## Conditional model:
+##                    Estimate Std. Error z value Pr(&gt;|z|)    
+## (Intercept)         -0.8368     0.2645  -3.163  0.00156 ** 
+## conditionTreatment   1.5346     0.3742   4.101 4.11e-05 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
+<p>The fixed-effect coefficients here are on the <strong>logit
+(log-odds) scale</strong>, which is not a natural scale for most readers
+to interpret directly. Just as we used <code>emmeans</code> in Section 5
+to get model-implied means rather than raw coefficients, we can ask
+<code>emmeans</code> to back-transform these estimates onto the
+probability scale:</p>
+<pre class="r"><code>emm_bin &lt;- emmeans(mod_bin_tmb, ~ condition, type = &quot;response&quot;)
+emm_bin</code></pre>
+<pre><code>##  condition  prob     SE  df asymp.LCL asymp.UCL
+##  Control   0.302 0.0558 Inf     0.205     0.421
+##  Treatment 0.668 0.0585 Inf     0.545     0.771
+## 
+## Confidence level used: 0.95 
+## Intervals are back-transformed from the logit scale</code></pre>
+</div>
+<div id="example-2-count-data-poisson-negative-binomial-and-zero-inflation" class="section level2">
+<h2>7.3. Example 2: Count Data – Poisson, Negative Binomial, and
+Zero-Inflation</h2>
+<p>Count outcomes bring a second, distinct problem:
+<strong>overdispersion</strong>. A Poisson distribution assumes the
+variance exactly equals the mean, but many real count outcomes (symptom
+counts, number of falls, number of relapses) are considerably more
+variable than that. On top of overdispersion, clinical count data often
+has an excess of “structural” zeros – patients for whom the count is
+always going to be zero, for reasons unrelated to the count process for
+everyone else.</p>
+<pre class="r"><code>set.seed(2026)
+n_pts &lt;- 50
+n_obs &lt;- 6
+
+df_count &lt;- expand.grid(
+  patientID = factor(1:n_pts),
+  visit     = 1:n_obs
+) %&gt;%
+  mutate(
+    # As above: assigning group by patientID (not by row) keeps this a genuine
+    # between-subjects factor, with every patient in one arm for all of their visits.
+    group = factor(if_else(as.numeric(patientID) &lt;= n_pts / 2, &quot;Placebo&quot;, &quot;Active&quot;))
+  )
+
+# Simulate overdispersed counts (via a negative binomial generating process) with an
+# additional 30% chance of a &quot;structural&quot; zero layered on top.
+p_zero &lt;- 0.30
+df_count &lt;- df_count %&gt;%
+  mutate(
+    is_structural_zero = rbinom(n(), 1, p_zero),
+    lambda = exp(1.5 - 0.4 * visit + 0.6 * (group == &quot;Active&quot;) + rnorm(n_pts, 0, 0.4)[patientID]),
+    raw_count = rnbinom(n(), size = 1.5, mu = lambda),
+    symptom_count = if_else(is_structural_zero == 1, 0L, raw_count)
+  )</code></pre>
+<div id="start-simple-and-let-diagnostics-tell-you-when-to-upgrade" class="section level3">
+<h3>7.3.1 Start Simple, and Let Diagnostics Tell You When To
+Upgrade</h3>
+<p>It’s tempting to jump straight to the most flexible model (negative
+binomial with zero inflation), but a more feasible workflow is to start
+with the simplest plausible model, check whether it’s adequate, and only
+add complexity where the diagnostics say you need it:</p>
+<pre class="r"><code>mod_poisson &lt;- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  data   = df_count,
+  family = poisson(link = &quot;log&quot;)
+)
+
+check_overdispersion(mod_poisson)</code></pre>
+<pre><code>## # Overdispersion test
+## 
+##        dispersion ratio =   2.052
+##   Pearson&#39;s Chi-Squared = 605.211
+##                 p-value = &lt; 0.001</code></pre>
+<pre><code>## Overdispersion detected.</code></pre>
+<p>The Poisson model’s own diagnostic tells us clearly that we have a
+problem: a dispersion ratio well above 1 means the data are considerably
+more variable than a Poisson distribution allows for, and the test is
+significant. This is exactly the situation <code>nbinom2</code> was
+built for, since the negative binomial’s variance function (<span class="math inline">\(\text{Var}(Y) = \mu + \mu^2/\theta\)</span>)
+includes a free parameter (<span class="math inline">\(\theta\)</span>)
+to absorb exactly this kind of extra variability:</p>
+<pre class="r"><code>mod_negbin &lt;- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  data   = df_count,
+  family = nbinom2(link = &quot;log&quot;)
+)
+
+check_overdispersion(mod_negbin)</code></pre>
+<pre><code>## # Overdispersion test
+## 
+##  dispersion ratio = 0.915
+##           p-value = 0.976</code></pre>
+<pre><code>## No overdispersion detected.</code></pre>
+<p>Once we let the model estimate its own dispersion parameter, the
+overdispersion problem disappears – which is reassuring, but is also
+exactly what we should expect, since the negative binomial model now has
+the flexibility to match however much extra variance the data actually
+contain. Finally, we can add a zero-inflation component to explicitly
+model the excess structural zeros:</p>
+<pre class="r"><code>mod_zinb &lt;- glmmTMB(
+  symptom_count ~ group * visit + (1 | patientID),
+  ziformula = ~ 1,  # a single, constant zero-inflation probability across all observations
+  data      = df_count,
+  family    = nbinom2(link = &quot;log&quot;)
+)</code></pre>
+</div>
+<div id="comparing-the-three-models" class="section level3">
+<h3>7.3.2 Comparing the Three Models</h3>
+<pre class="r"><code>anova(mod_poisson, mod_negbin, mod_zinb)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Df"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["AIC"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["BIC"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["logLik"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["deviance"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Chisq"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["Chi Df"],"name":[7],"type":["dbl"],"align":["right"]},{"label":["Pr(>Chisq)"],"name":[8],"type":["dbl"],"align":["right"]}],"data":[{"1":"5","2":"1051.9475","3":"1070.4664","4":"-520.9738","5":"1041.9475","6":"NA","7":"NA","8":"NA","_rn_":"mod_poisson"},{"1":"6","2":"860.2572","3":"882.4799","4":"-424.1286","5":"848.2572","6":"193.690297","7":"1","8":"4.975751e-44","_rn_":"mod_negbin"},{"1":"7","2":"860.9825","3":"886.9090","4":"-423.4912","5":"846.9825","6":"1.274742","7":"1","8":"2.588790e-01","_rn_":"mod_zinb"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p><strong>A caveat on this comparison.</strong> Formally, a
+likelihood-ratio test assumes the simpler model is nested inside the
+more complex one <em>and</em> that the parameter being added is not
+sitting on the boundary of its allowed range under the null hypothesis.
+Both comparisons here bend that assumption a little: the
+Poisson-to-negative-binomial step is really testing whether the negative
+binomial’s dispersion parameter is at its (boundary) limiting value
+where the negative binomial reduces to a Poisson distribution, and the
+negative-binomial-to-ZINB step is testing whether a probability
+parameter is at the boundary value of 0. In both cases, the <span class="math inline">\(\chi^2\)</span> p-value from a standard LRT is a
+commonly-used approximation rather than an exact test – the same general
+caveat about testing variance components at a boundary that came up for
+singular fits in Section 3.5.3 of this repository. In practice, most
+applied researchers still use these comparisons as a practical, ordered
+guide (do I need overdispersion? do I need zero-inflation on top of
+that?) alongside AIC, rather than treating the p-values as exact.</p>
+</div>
+<div id="marginal-predictions-on-the-response-scale" class="section level3">
+<h3>7.3.3 Marginal Predictions on the Response Scale</h3>
+<p>Just as we back-transformed the binary model’s predictions above, we
+can ask for the zero-inflated model’s predicted symptom counts on their
+natural (response) scale, broken out by group and visit:</p>
+<pre class="r"><code>emmeans(mod_zinb, ~ group | visit, at = list(visit = 1:6), type = &quot;response&quot;)</code></pre>
+<pre><code>## visit = 1:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     5.025 1.2400 Inf     3.096     8.155
+##  Placebo    2.885 0.6920 Inf     1.803     4.615
+## 
+## visit = 2:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     3.230 0.6780 Inf     2.140     4.873
+##  Placebo    1.772 0.3470 Inf     1.207     2.600
+## 
+## visit = 3:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     2.076 0.4080 Inf     1.412     3.051
+##  Placebo    1.088 0.2050 Inf     0.752     1.574
+## 
+## visit = 4:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     1.334 0.2820 Inf     0.882     2.018
+##  Placebo    0.668 0.1480 Inf     0.433     1.032
+## 
+## visit = 5:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     0.857 0.2140 Inf     0.526     1.398
+##  Placebo    0.410 0.1150 Inf     0.236     0.712
+## 
+## visit = 6:
+##  group   response     SE  df asymp.LCL asymp.UCL
+##  Active     0.551 0.1660 Inf     0.305     0.996
+##  Placebo    0.252 0.0893 Inf     0.126     0.505
+## 
+## Confidence level used: 0.95 
+## Intervals are back-transformed from the log scale</code></pre>
+<p>Note the <code>at = list(visit = 1:6)</code>. Because
+<code>visit</code> is a <em>continuous</em> predictor in this model (not
+a factor), asking for <code>~ group | visit</code> without also
+specifying <code>at</code> will only evaluate the model at
+<code>visit</code>’s mean (here, 3.5) rather than at each actual visit –
+giving you one combined estimate rather than the visit-by-visit
+trajectory you’re probably after. Whenever you condition on
+(<code>|</code>) a continuous variable, decide explicitly which values
+of it you want predictions at.</p>
+</div>
+</div>
+<div id="summary" class="section level2">
+<h2>Summary</h2>
+<ul>
+<li>GLMMs extend everything you already know about specifying fixed and
+random effects to outcomes that are binary, count, or otherwise
+non-normally distributed, via a link function and an appropriate
+probability family.</li>
+<li><code>glmmTMB</code> adds negative-binomial, zero-inflated, and
+dispersion-modeling options on top of what <code>lme4::glmer()</code>
+already provides.</li>
+<li><ul>
+<li>Check overdispersion on your <em>simplest</em> candidate model
+first; it is the diagnostic that tells you whether you need to move from
+Poisson to negative binomial in the first place, not just a box to check
+after the fact on your final model.</li>
+</ul></li>
+<li>Likelihood-ratio tests that compare different families, or that test
+a parameter sitting at a boundary value (e.g., “is there any
+zero-inflation at all?”), should be treated as useful approximations
+rather than exact tests.</li>
+</ul>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Brooks, M. E., Kristensen, K., van Benthem, K. J., Magnusson, A.,
+Berg, C. W., Nielsen, A., Skaug, H. J., Maechler, M., &amp; Bolker, B.
+M. (2017). glmmTMB Balances Speed and Flexibility Among Packages for
+Zero-inflated Generalized Linear Mixed Modeling. <em>The R Journal,
+9</em>(2), 378-400. <a href="https://doi.org/10.32614/RJ-2017-066" class="uri">https://doi.org/10.32614/RJ-2017-066</a></p>
+<p>Agresti, A. (2015). <em>Foundations of Linear and Generalized Linear
+Models</em>. Wiley.</p>
+</div>
 
 
 

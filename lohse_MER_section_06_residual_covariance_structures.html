@@ -9,11 +9,11 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT" />
+<meta name="author" content="Keith Lohse, PhD, PStat" />
 
-<meta name="date" content="2022-10-04" />
+<meta name="date" content="2026-08-04" />
 
-<title>Applied Mixed-Effects Regresion Resources</title>
+<title>Section 6: Modeling Autocorrelation and Heteroscedasticity with nlme</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -1621,74 +1621,561 @@ display: none;
 
 
 
-<h1 class="title toc-ignore">Applied Mixed-Effects Regresion
-Resources</h1>
-<h4 class="author">Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan
-Kozlowksi, PhD, PT</h4>
-<h4 class="date">2022-10-04</h4>
+<h1 class="title toc-ignore">Section 6: Modeling Autocorrelation and
+Heteroscedasticity with <code>nlme</code></h1>
+<h4 class="author">Keith Lohse, PhD, PStat</h4>
+<h4 class="date">2026-08-04</h4>
 
 </div>
 
 
-<p>Resources for implementing mixed-effects models for different
-designs.</p>
-<p>Sections 1-4 were part of the original repository accompanying our
-peer-reviewed manuscript (Lohse, Kozlowski, &amp; Strube, 2023,
-<em>Communications in Kinesiology</em>) as supplementary material. These
-sections have since been revised for clarity and updated code, but the
-changes are minimal relative to the published version. Sections 5-9 are
-brand new additions, extending beyond the scope of the original
-manuscript, and were not part of the peer-reviewed material.</p>
+<p>Every model we have fit with <code>lme4::lmer()</code> so far in this
+repository makes one assumption that we have never actually stated out
+loud - although it was implicit in Section 1’s very first equation.</p>
+<p>Recall the general form of a mixed-effects model from Section 1
+(Equation 1 of the companion paper): <span class="math display">\[\mathbf{y} = \mathbf{X}\boldsymbol{\beta} +
+\mathbf{Z}\boldsymbol{\gamma} + \boldsymbol{\epsilon}\]</span> where
+<span class="math inline">\(\mathbf{y}\)</span> is the vector of every
+observation across every subject, <span class="math inline">\(\mathbf{X}\boldsymbol{\beta}\)</span> is the
+fixed-effects part of the model, <span class="math inline">\(\mathbf{Z}\boldsymbol{\gamma}\)</span> is the
+random-effects part, and <span class="math inline">\(\boldsymbol{\epsilon}\)</span> is the vector of
+leftover residuals.</p>
+<p>To talk about correlation <em>within</em> a subject over time, it
+helps to zoom in on one subject at a time – restricting Equation 1 to
+just subject <span class="math inline">\(i\)</span>’s own rows: <span class="math display">\[\mathbf{y}_i = \mathbf{X}_i\boldsymbol{\beta} +
+\mathbf{Z}_i\boldsymbol{\gamma}_i + \boldsymbol{\epsilon}_i\]</span>
+This is not a new model. It is the exact same equation, just written one
+subject’s block of rows at a time – the same partitioning that Figure 2
+of the companion paper shows <span class="math inline">\(\mathbf{Z}\)</span> performing when it “spreads
+out” the random effects, <span class="math inline">\(\boldsymbol{\gamma}\)</span>, into a share for
+each subject.</p>
+<p>As we’ve previously discussed, every time we’ve written out a set of
+random effects (e.g., Section 2’s random-slopes model), that subject
+<span class="math inline">\(i\)</span>’s own vector of random deviates
+follows a multivariate normal distribution – for instance, for a random
+intercept and random slope: <span class="math display">\[\begin{bmatrix}\gamma_{0i}\\
+\gamma_{1i}\end{bmatrix} \sim
+\mathcal{N}\left(\begin{bmatrix}0\\0\end{bmatrix},
+\begin{bmatrix}\sigma_0^2 &amp; \sigma_{01}\\ \sigma_{01} &amp;
+\sigma_1^2\end{bmatrix}\right)\]</span> We will now give that covariance
+matrix a name, <span class="math inline">\(\mathbf{G}\)</span>, so that
+<span class="math inline">\(\boldsymbol{\gamma}_i
+\sim \mathcal{N}(\mathbf{0}, \mathbf{G})\)</span>. Nothing about <span class="math inline">\(\mathbf{G}\)</span> is new here - it is the same
+matrix you have already been building throughout Sections 1-4, just
+represented by a single letter instead of spelled out in full every
+time.</p>
+<p>What every model so far <em>has</em> quietly assumed, without ever
+writing it down this explicitly, is the analogous statement for the
+residuals: <span class="math inline">\(\boldsymbol{\epsilon}_i \sim
+\mathcal{N}(\mathbf{0}, \sigma^2\mathbf{I})\)</span> - every residual
+for subject <span class="math inline">\(i\)</span> has the same variance
+<span class="math inline">\(\sigma^2\)</span>, and none of them
+correlate with one another. We can give this residual covariance matrix
+a name too, <span class="math inline">\(\mathbf{R}_i\)</span>, so that
+<span class="math inline">\(\boldsymbol{\epsilon}_i \sim
+\mathcal{N}(\mathbf{0},
+\mathbf{R}_i)\)</span>. Up until now, <span class="math inline">\(\mathbf{R}_i\)</span> has simply <em>been</em>
+<span class="math inline">\(\sigma^2\mathbf{I}\)</span>, we just never
+called it that.</p>
+<p>Once both matrices have names, the total variance of subject <span class="math inline">\(i\)</span>’s outcomes follows directly. <span class="math inline">\(\mathbf{X}_i\boldsymbol{\beta}\)</span> is a fixed
+quantity, not a random one, so it contributes nothing to the variance;
+and because <span class="math inline">\(\boldsymbol{\gamma}_i\)</span>
+and <span class="math inline">\(\boldsymbol{\epsilon}_i\)</span> are
+assumed independent of one another, <span class="math display">\[\text{Var}(\mathbf{y}_i) =
+\text{Var}(\mathbf{Z}_i\boldsymbol{\gamma}_i + \boldsymbol{\epsilon}_i)
+= \mathbf{Z}_i\,\text{Var}(\boldsymbol{\gamma}_i)\,\mathbf{Z}_i^T +
+\text{Var}(\boldsymbol{\epsilon}_i)
+= \mathbf{Z}_i \mathbf{G} \mathbf{Z}_i^T + \mathbf{R}_i\]</span></p>
+<p>Thus far, we have principally discussed how to deal with statistical
+dependence through what is called the <strong>“G-side”</strong> matrix;
+that is, the specification of the <strong>random effects</strong>.
+However, especially when we have repeated observations at the lowest
+level of our data, we might also need to worry about the
+<strong>“R-side”</strong> matrix; that is, are there additional
+considerations we need to make about the (co)variance of our
+<strong>residuals</strong> above and beyond our random effects. Every
+model in Sections 1-4 fixed <span class="math inline">\(\mathbf{R}_i =
+\sigma^2\mathbf{I}\)</span> and let <span class="math inline">\(\mathbf{G}\)</span> do all of the work of
+describing dependency within a subject. <code>lme4</code> doesn’t give
+you a way to change this - <span class="math inline">\(\mathbf{R}_i =
+\sigma^2\mathbf{I}\)</span> is baked into how the package is built,
+which is part of why it is so fast even for complicated crossed
+random-effects structures (Section 8). Critically, if we have specified
+our random effects structure sufficiently, this is also a very
+reasonable assumption. However, treating <span class="math inline">\(\mathbf{R}_i\)</span> as a plain <span class="math inline">\(\sigma^2\mathbf{I}\)</span> may not always be
+sufficient. Specifically, there are two properties of our residuals that
+we need to concern ourselves with:</p>
 <ol style="list-style-type: decimal">
-<li><strong>Section 01</strong> - Introduction to Mixed-Effects Models
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_01_introduction.html</a></li>
-</ul></li>
-<li><strong>Section 02</strong> - Mixed-Effects Models for Longitudinal
-Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html</a></li>
-</ul></li>
-<li><strong>Section 03</strong> - Mixed-Effects Models for Factorial
-Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html</a></li>
-</ul></li>
-<li><strong>Section 04</strong> - Mixed-Effect Models for Time Series
-within Factorial Designs
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_04_timeSeriesWithin.html</a></li>
-</ul></li>
-<li><strong>Section 05</strong> - Fixed-Effect Coding, Centering, and
-Post-Hoc Contrasts with <code>emmeans</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html</a></li>
-</ul></li>
-<li><strong>Section 06</strong> - Modeling Autocorrelation and
-Heteroscedasticity with <code>nlme</code>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_06_residual_covariance_structures.html</a></li>
-</ul></li>
-<li><strong>Section 07</strong> - Generalized Linear Mixed Models
-(GLMMs) for Non-Normal Data
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html</a></li>
-</ul></li>
-<li><strong>Section 08</strong> - Crossed Random Effects (Participants
-and Stimuli/Items)
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Section 09</strong> - Model Diagnostics for Mixed-Effects
-Models
-<ul>
-<li>(Coming Soon)</li>
-</ul></li>
-<li><strong>Further Readings and Recommendations</strong>
-<ul>
-<li><a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html" class="uri">https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html</a></li>
-</ul></li>
+<li><strong>Autocorrelation.</strong> Observations closer together in
+time, from the same subject, tend to be <em>more</em> similar to each
+other than observations further apart. A person having an unusually good
+day at Week 3 is a better predictor of Week 4 than of Week 40.</li>
+<li><strong>Heteroscedasticity.</strong> The variance of the residuals
+can change systematically over time, across conditions, or across groups
+– e.g., people’s scores might be tightly clustered right after admission
+and much more spread out a year later, as some people have recovered
+fully and others have not.</li>
 </ol>
+<p>The <code>nlme</code> package (which we already used for the
+negative-exponential growth model in Section 2) lets us model both of
+these directly, by specifying an explicit structure for <span class="math inline">\(\mathbf{R}_i\)</span> – on top of whatever <span class="math inline">\(\mathbf{G}\)</span> we’ve already chosen for the
+random effects – instead of accepting the default <span class="math inline">\(\sigma^2\mathbf{I}\)</span>.</p>
+<div id="common-residual-covariance-structures" class="section level2">
+<h2>6.1. Common Residual Covariance Structures</h2>
+<ul>
+<li><strong>Compound Symmetry (<code>corCompSymm</code>)</strong>: a
+single correlation <span class="math inline">\(\rho\)</span> between
+<em>any</em> two time points from the same subject, regardless of how
+far apart they are. This is the same assumption implicit in a
+repeated-measures ANOVA when sphericity holds (see Section 3; a
+random-intercept-only mixed model is mathematically equivalent to
+compound symmetry.</li>
+<li><strong>Autoregressive Order 1 (<code>corAR1</code>)</strong>:
+correlation decays geometrically with each discrete time step, <span class="math inline">\(\text{Corr}(\epsilon_t, \epsilon_{t+k}) =
+\rho^{|k|}\)</span>. This is a natural choice when your time points are
+evenly spaced (Trial 1, 2, 3, 4…) and you expect the “good day/bad day”
+carryover to fade steadily rather than staying constant.</li>
+<li><strong>Continuous AR1 (<code>corCAR1</code>)</strong>: the same
+idea as <code>corAR1</code>, but for <em>continuously</em> and
+(potentially) <em>irregularly</em> spaced time – exactly the situation
+we described in Section 2, where our spinal-cord-injury data were
+“collected on different days for different people,” so that Month 3 for
+one participant might really be Day 85 and for another Day 95.</li>
+<li><strong>Unstructured (<code>corSymm</code>)</strong>: no assumed
+pattern at all – every pair of time points gets its own,
+freely-estimated correlation. This is the most flexible option but also
+the most informationally “expensive”: with <span class="math inline">\(T\)</span> time points it estimates <span class="math inline">\(T(T-1)/2\)</span> separate correlation parameters,
+which can quickly become more than your data can support.</li>
+</ul>
+<hr />
+</div>
+<div id="a-simulated-example-recovering-a-known-ar1-process" class="section level2">
+<h2>6.2. A Simulated Example: Recovering a Known AR(1) Process</h2>
+<p>To see these ideas clearly, we will first simulate data where we know
+the true answer: 30 subjects, measured at 6 evenly-spaced time points,
+with residuals that (a) truly follow an AR(1) process with <span class="math inline">\(\rho = 0.65\)</span> and (b) truly grow more
+variable over time.</p>
+<pre class="r"><code>library(tidyverse)
+library(nlme)</code></pre>
+<pre class="r"><code>set.seed(2026)
+n_subjects &lt;- 30
+n_timepoints &lt;- 6
+
+df_nlme &lt;- expand.grid(
+  subID = factor(1:n_subjects),
+  time  = 1:n_timepoints
+) %&gt;%
+  arrange(subID, time)
+
+sigma_base &lt;- 1.0 # baseline variance
+rho_true &lt;- 0.65 # true correlation
+
+# Build each subject&#39;s residual trajectory in two steps. First, a properly stationary
+# AR(1) base process with constant unit variance throughout -- the sqrt(1 - rho_true^2)
+# term on each innovation is essential here; without it, the AR(1) recursion&#39;s own
+# variance compounds on top of whatever heteroscedasticity we add next, and rho and the
+# variance pattern stop being cleanly separable. Second, scale that base process by the
+# intended heteroscedasticity pattern, so the growing variance is exactly what we say it
+# is, and nothing more.
+df_nlme$residual &lt;- unlist(lapply(1:n_subjects, function(i) {
+  base &lt;- numeric(n_timepoints)
+  base[1] &lt;- rnorm(1, 0, 1)
+  for (t in 2:n_timepoints) {
+    base[t] &lt;- rho_true * base[t-1] + rnorm(1, 0, sqrt(1 - rho_true^2))
+  }
+  var_scale &lt;- 1 + 0.2 * (0:(n_timepoints - 1))
+  sigma_base * sqrt(var_scale) * base
+}))
+
+df_nlme &lt;- df_nlme %&gt;%
+  mutate(score = 5.0 + 0.8 * time + residual)</code></pre>
+</div>
+<div id="fitting-three-increasingly-realistic-models" class="section level2">
+<h2>6.3. Fitting Three Increasingly Realistic Models</h2>
+<p>We’ll fit the same fixed effect of <code>time</code> three times,
+adding one piece of residual structure at each step, so we can watch
+model fit improve as our assumptions get closer to how the data were
+actually generated.</p>
+<pre class="r"><code># Model 1: standard random-intercept model. i.i.d. residuals -- our lme4 default assumption.
+m1_iid &lt;- lme(
+  fixed  = score ~ time,
+  random = ~ 1 | subID,
+  data   = df_nlme,
+  method = &quot;REML&quot;
+)
+
+# Model 2: adds an AR(1) residual correlation structure within each subject.
+m2_ar1 &lt;- lme(
+  fixed       = score ~ time,
+  random      = ~ 1 | subID,
+  correlation = corAR1(form = ~ time | subID),
+  data        = df_nlme,
+  method      = &quot;REML&quot;
+)
+
+# Model 3: adds a variance function on top of the AR(1) structure, letting the residual
+# variance differ freely at each time point (varIdent estimates one scale factor per level
+# of its grouping variable -- nlme treats `time` as a grouping factor here even though the
+# column itself is numeric, so this correctly gives us one variance parameter per time point).
+m3_ar1_var &lt;- lme(
+  fixed       = score ~ time,
+  random      = ~ 1 | subID,
+  correlation = corAR1(form = ~ time | subID),
+  weights     = varIdent(form = ~ 1 | time),
+  data        = df_nlme,
+  method      = &quot;REML&quot;
+)</code></pre>
+<pre class="r"><code>anova(m1_iid, m2_ar1, m3_ar1_var)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["call"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Model"],"name":[2],"type":["int"],"align":["right"]},{"label":["df"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["AIC"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["BIC"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["logLik"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["Test"],"name":[7],"type":["fct"],"align":["left"]},{"label":["L.Ratio"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["p-value"],"name":[9],"type":["dbl"],"align":["right"]}],"data":[{"1":"lme.formula(fixed = score ~ time, data = df_nlme, random = ~1 |     subID, method = \"REML\")","2":"1","3":"4","4":"539.3428","5":"552.0699","6":"-265.6714","7":"","8":"NA","9":"NA","_rn_":"m1_iid"},{"1":"lme.formula(fixed = score ~ time, data = df_nlme, random = ~1 |     subID, correlation = corAR1(form = ~time | subID), method = \"REML\")","2":"2","3":"5","4":"517.7026","5":"533.6116","6":"-253.8513","7":"1 vs 2","8":"23.64012","9":"1.161406e-06","_rn_":"m2_ar1"},{"1":"lme.formula(fixed = score ~ time, data = df_nlme, random = ~1 |     subID, correlation = corAR1(form = ~time | subID), weights = varIdent(form = ~1 |     time), method = \"REML\")","2":"3","3":"10","4":"505.8578","5":"537.6757","6":"-242.9289","7":"2 vs 3","8":"21.84479","9":"5.603891e-04","_rn_":"m3_ar1_var"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<p>Each model is nested inside the next (Model 2 adds one correlation
+parameter to Model 1; Model 3 adds five variance-ratio parameters to
+Model 2), so the likelihood-ratio tests in this table are valid, and
+both are highly significant: allowing for autocorrelation improves the
+fit substantially, and allowing the residual variance to grow over time
+improves it further still. This matches how we built the data, which of
+course we rigged in advance. The value of doing this with simulated data
+first is exactly that you get to confirm the method recovers a structure
+you already know is there before trusting it on real data where you
+don’t.</p>
+</div>
+<div id="visualizing-the-autocorrelation-directly" class="section level2">
+<h2>6.4. Visualizing the Autocorrelation Directly</h2>
+<p>Beyond checking the numeric value of <span class="math inline">\(\hat\rho\)</span>, it is good practice to look at
+the residual autocorrelation function (ACF) directly, both before and
+after adding the <code>corAR1</code> term. Keep in mind that for this
+example, we have “baked in” a specific auto-correlation for our
+simulated data. In reality, we don’t know what the “true”
+autocorrelation is, so instead we would be looking for any evidence of
+residual autocorrelation:</p>
+<pre class="r"><code># ACF()&#39;s default residuals (resType = &quot;pearson&quot;) are NOT adjusted for a model&#39;s fitted
+# correlation structure, so they will not show whether corAR1 actually worked. Use
+# resType = &quot;normalized&quot; instead. See the &quot;Technical notes&quot; here for the same fix in
+# another worked example: https://bbolker.github.io/mixedmodels-misc/notes/corr_braindump.html
+plot(ACF(m1_iid, maxLag = 5, resType = &quot;normalized&quot;), main = &quot;Model 1 (i.i.d.) Residual ACF&quot;)</code></pre>
+<p><img role="img" src="data:image/png;base64,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" width="480" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>plot(ACF(m2_ar1, maxLag = 5, resType = &quot;normalized&quot;), main = &quot;Model 2 (AR1) Residual ACF&quot;)</code></pre>
+<p><img role="img" src="data:image/png;base64,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" width="480" style="display: block; margin: auto;" /></p>
+</div>
+<div id="a-real-data-example-continuous-time-with-corcar1" class="section level2">
+<h2>6.5. A Real-Data Example: Continuous Time with
+<code>corCAR1</code></h2>
+<p>The simulated example above uses evenly-spaced integer time points (1
+through 6), which is exactly the situation <code>corAR1</code> was built
+for. But recall the longitudinal spinal-cord-injury data from Section 2
+(<code>data_SCI_longitudinal_example.csv</code>): “these data were all
+collected on different days for different people… Month 1 as a time
+point might be Day 20 for some people, but Day 30 for others.” That is
+precisely the situation <code>corCAR1</code> (continuous-time AR1) is
+designed for, and we don’t need to simulate anything new to see it in
+action – we can go straight back to real data we’ve already loaded once
+before.</p>
+<p>It’s worth pausing on what Section 2 actually <em>did</em> with this
+exact dependency problem, because it is a clean illustration of the
+distinction between G-side and R-side modeling that we discussed at the
+beginning. Section 2 never touched <span class="math inline">\(\mathbf{R}_i\)</span> at all – every one of its
+models used a plain <span class="math inline">\(\sigma^2\mathbf{I}\)</span> for the residuals.
+Instead, it handled the fact that a person’s functional-independence
+scores over time are not independent entirely through <span class="math inline">\(\mathbf{G}\)</span>, by building an increasingly
+rich random-effects structure: a random intercept, then a random linear
+slope for <code>year.0</code>, then a random quadratic term, then a
+random cubic term – each addition justified by a significant
+likelihood-ratio test (<span class="math inline">\(\chi^2(3)=1046.98\)</span>, then <span class="math inline">\(\chi^2(4)=746.46\)</span>, then <span class="math inline">\(\chi^2(5)=252.32\)</span>). That is twelve
+additional variance and covariance parameters, across three model
+comparisons, spent on capturing more and more of the within-subject
+dependency by letting each person’s <em>own trajectory shape</em> bend
+to fit their data. This was a perfectly reasonable strategy – per Part
+6.6 (below), a rich enough <span class="math inline">\(\mathbf{G}\)</span> can produce well-calibrated
+fixed-effect tests without ever modeling <span class="math inline">\(\mathbf{R}_i\)</span> explicitly, and Section 2
+was, after all, primarily interested in testing whether AIS Grade
+predicts the <em>shape</em> of that trajectory, which needed those
+polynomial fixed effects regardless.</p>
+<p><code>corCAR1</code> offers a genuinely different way to attack the
+same underlying dependency. Instead of asking <span class="math inline">\(\mathbf{G}\)</span> to become progressively
+richer, one polynomial term at a time, it models the persistence
+directly, in <span class="math inline">\(\mathbf{R}_i\)</span>, with a
+single interpretable parameter: how strongly today’s score predicts a
+score close in time, decaying continuously the further apart two
+assessments are. Let’s fit the simplest possible version – deliberately
+using only a linear fixed effect of <code>year.0</code> and only a
+random <em>intercept</em>, so that whatever improvement we see is
+attributable to <span class="math inline">\(\mathbf{R}_i\)</span> alone,
+not to a richer <span class="math inline">\(\mathbf{G}\)</span>:</p>
+<pre class="r"><code>DAT2 &lt;- read.csv(&quot;https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv&quot;,
+                 stringsAsFactors = TRUE)
+DAT2$year.0 &lt;- (DAT2$time - 1) / 12
+
+m_iid_real  &lt;- lme(rasch_FIM ~ year.0, random = ~ 1 | subID, data = DAT2, method = &quot;REML&quot;)
+m_car1_real &lt;- lme(rasch_FIM ~ year.0, random = ~ 1 | subID,
+                    correlation = corCAR1(form = ~ year.0 | subID),
+                    data = DAT2, method = &quot;REML&quot;)
+
+anova(m_iid_real, m_car1_real)</code></pre>
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["call"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Model"],"name":[2],"type":["int"],"align":["right"]},{"label":["df"],"name":[3],"type":["dbl"],"align":["right"]},{"label":["AIC"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["BIC"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["logLik"],"name":[6],"type":["dbl"],"align":["right"]},{"label":["Test"],"name":[7],"type":["fct"],"align":["left"]},{"label":["L.Ratio"],"name":[8],"type":["dbl"],"align":["right"]},{"label":["p-value"],"name":[9],"type":["dbl"],"align":["right"]}],"data":[{"1":"lme.formula(fixed = rasch_FIM ~ year.0, data = DAT2, random = ~1 |     subID, method = \"REML\")","2":"1","3":"4","4":"4936.58","5":"4954.886","6":"-2464.29","7":"","8":"NA","9":"NA","_rn_":"m_iid_real"},{"1":"lme.formula(fixed = rasch_FIM ~ year.0, data = DAT2, random = ~1 |     subID, correlation = corCAR1(form = ~year.0 | subID), method = \"REML\")","2":"2","3":"5","4":"4150.74","5":"4173.623","6":"-2070.37","7":"1 vs 2","8":"787.84","9":"2.376255e-173","_rn_":"m_car1_real"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+  </script>
+</div>
+<pre class="r"><code>summary(m_car1_real)$modelStruct$corStruct</code></pre>
+<pre><code>## Correlation structure of class corCAR1 representing
+##       Phi 
+## 0.5088818</code></pre>
+<p>The improvement in fit here is enormous, and reflective of patterns
+you’d likely see in real data – functional independence really does show
+strong day-to-day/month-to-month carryover within a person (someone
+recovering quickly at Month 3 is very likely to still be recovering
+quickly at Month 4). Notice what it took to get here, however: Section 2
+spent twelve parameters, across an intercept, a slope, a quadratic, and
+a cubic random effect, progressively chipping away at within-subject
+dependency while <em>also</em> building a detailed picture of average
+recovery curvature. Here, a <em>single</em> additional parameter – <span class="math inline">\(\hat\rho\)</span> – captures a comparable order of
+magnitude of improvement (a likelihood-ratio statistic of 787.84, on
+just 1 degree of freedom), because it is aimed squarely at the
+dependency itself rather than approximating it by modeling trajectory
+shape. This is not quite an apples-to-apples comparison – Section 2’s
+rich <span class="math inline">\(\mathbf{G}\)</span> was doing double
+duty, capturing genuine nonlinear curvature <em>and</em> individual
+differences in that curvature. In contrast, <code>corCAR1</code> alone
+tells us nothing about individual or group level trajectories, but it
+does give us a parsimonious way of dealing with statistical dependency
+in our residuals.</p>
+<p>The two different approaches are not mutually exclusive, either.
+Nothing stops you from combining them – fitting Section 2’s cubic
+random-effects growth curve <em>and</em> an explicit
+<code>corCAR1</code> term in the same model, if you have reason to think
+meaningful residual autocorrelation remains even after allowing each
+person their own curve. In practice, with only 40 subjects, that
+combined model is asking a great deal of the data at once, and Section
+3’s discussion of singular fits is a good reminder to check convergence
+carefully – and to consider, per Part 6.6.4, whether your actual
+research question (testing a fixed effect vs. interpreting the variance
+components) calls for that additional complexity at all – before
+trusting it.</p>
+<p>This is also a good habit to build for its own sake: whenever this
+repository already has a real dataset whose design fits the technique
+you’re learning, it’s worth running the new technique on it, rather than
+only ever practicing on data you simulated yourself. You already know
+quite a lot about this dataset from Section 2 (e.g., the growth curves
+in Figure/plot form, the negative-exponential model, the AIS Grade
+comparisons), and layering <code>corCAR1</code> on top of that existing
+understanding – and directly comparing it to the strategy Section 2
+already used – is a much faster way to build intuition than starting
+over with an unfamiliar variable name.</p>
+</div>
+<div id="when-does-the-g-sider-side-distinction-actually-matter" class="section level2">
+<h2>6.6. When Does the G-Side/R-Side Distinction Actually Matter?</h2>
+<p>We now have the tools to model <span class="math inline">\(\mathbf{R}_i\)</span> directly, which raises a
+sharper question than “why don’t we always use <code>nlme</code>”: given
+that <span class="math inline">\(\text{Var}(\mathbf{y}_i) = \mathbf{Z}_i
+\mathbf{G}
+\mathbf{Z}_i^T + \mathbf{R}_i\)</span> simply <em>adds</em> the two
+pieces together, how much does it actually matter whether a given source
+of dependency is captured by <span class="math inline">\(\mathbf{G}\)</span> or by <span class="math inline">\(\mathbf{R}_i\)</span>? The honest answer depends
+heavily on what you are using the model for – and it is different for
+the two things we typically want out of a mixed-effects model: testing
+fixed effects, and interpreting the random effects themselves.</p>
+<div id="fixed-effect-point-estimates-robust-to-the-gr-partition" class="section level3">
+<h3>6.6.1 Fixed-Effect Point Estimates: Robust to the G/R Partition</h3>
+<p>Every mixed model estimates its fixed effects using a form of
+generalized least squares: observations get combined into an estimate of
+<span class="math inline">\(\boldsymbol{\beta}\)</span>, weighted by how
+much information each one is assumed to carry, where those weights come
+directly from the model’s assumed covariance structure, <span class="math inline">\(\mathbf{Z}_i \mathbf{G} \mathbf{Z}_i^T +
+\mathbf{R}_i\)</span>. If that assumed structure is <em>somewhat</em>
+wrong – say, because real residual autocorrelation gets folded into
+<span class="math inline">\(\mathbf{G}\)</span> instead of being modeled
+explicitly as <span class="math inline">\(\mathbf{R}_i\)</span> – the
+weights used to combine observations are no longer the <em>most
+efficient</em> possible weights, but they remain a reasonable, unbiased
+way to combine the data. This is the same basic robustness property that
+keeps ordinary regression coefficients unbiased even under
+heteroscedasticity: getting the variance structure wrong costs you
+precision, and (as the next section shows) can cost you calibration, but
+it does not, in general, introduce bias into the point estimate
+itself.</p>
+</div>
+<div id="fixed-effect-standard-errors-depends-on-whether-g-is-rich-enough" class="section level3">
+<h3>6.6.2 Fixed-Effect Standard Errors: Depends on Whether G Is Rich
+Enough</h3>
+<p>Standard errors are a different story, because they depend directly
+on how much <em>independent</em> information the model believes it has.
+Picture a subject’s scores over time genuinely following an
+autocorrelated, “streaky” pattern – a run of a few good days, then a run
+of a few bad days – rather than bouncing around independently from one
+time point to the next. A model built only on a random intercept assumes
+<strong>compound symmetry</strong>: any two of that subject’s time
+points are equally correlated, no matter how close together or far apart
+they are. Such a model has no way to distinguish “four genuinely
+independent measurements” from “four measurements drawn from the same
+short streak.” It ends up treating a temporally clustered,
+highly-correlated run as if it carried nearly as much information as
+four independent looks at the subject’s true trend – which overstates
+the precision of that trend estimate and understates its standard error.
+The risk is highest specifically for fixed effects that describe
+<em>change over time</em> (like a slope), since that is exactly the kind
+of estimate a “streaky” pattern can most easily fool.</p>
+<p>A random <strong>slope</strong> changes this picture substantially.
+Once each subject is allowed their own individual line – their own
+intercept and their own rate of change – a temporary streak (a subject
+who happens to be running high across several adjacent time points) can
+be partly absorbed into that subject’s own line, instead of being
+mistaken for extra evidence about the population-level trend. This does
+not literally “discover” that an autocorrelated process generated the
+data – the model still has no explicit concept of residual
+autocorrelation – but a random slope is flexible enough to approximate a
+good share of the same pattern (runs of similar values, within a
+subject, over nearby time points), which tends to pull the resulting
+fixed-effect standard errors back toward being well-calibrated, even
+without ever touching <span class="math inline">\(\mathbf{R}_i\)</span>
+directly.</p>
+<p>The practical lesson: <strong>the risk of an anti-conservative
+fixed-effect standard error is highest when <span class="math inline">\(\mathbf{G}\)</span> is sparse</strong> – often
+just a random intercept – <strong>and the true dependency has real
+structure over time</strong> (autocorrelation, or variance that changes
+with time). A random-effects structure with slopes that track the shape
+of your growth curves, exactly as Sections 2 and 4 already recommend,
+substantially closes that gap, because it gives the model a flexible,
+subject-specific way to absorb exactly the kind of statistical
+dependence that we would otherwise need to model with a more complex
+<span class="math inline">\(\mathbf{R}_i\)</span>.</p>
+</div>
+<div id="random-effect-variance-components-where-the-partition-matters-much-more" class="section level3">
+<h3>6.6.3 Random-Effect Variance Components: Where the Partition Matters
+Much More</h3>
+<p>Unliketing estimating/testing fixed effects, estimating the variance
+of random effects is a different matter entirely, because they
+<em>are</em> the answer to “how is the total variance divided up” – and
+that is precisely the question a G/R misattribution gets wrong. Picture
+the total variance in your outcome as a pie, correctly sized: a model
+that folds real residual autocorrelation into <span class="math inline">\(\mathbf{G}\)</span> instead of modeling it
+explicitly as <span class="math inline">\(\mathbf{R}_i\)</span> is not
+making the pie the wrong size – it is cutting the <em>same</em> pie
+along the wrong lines. Some of what should properly be described as
+“unexplained, time-varying noise within a subject” (<span class="math inline">\(\mathbf{R}_i\)</span>) gets relabeled as “this
+subject’s true, stable individual difference” (<span class="math inline">\(\mathbf{G}\)</span>), which typically inflates the
+estimated between-subject (intercept) variance.</p>
+<p>If your model also includes a random slope, the story gets one layer
+more complicated: some of that same misattributed variance can get
+pulled specifically into the <em>slope</em> variance instead of the
+intercept variance, since a random slope is one of the more flexible
+tools the model has available for approximating a “streaky,”
+time-varying pattern. That can make it look as though people genuinely
+differ in their rate of change, when a meaningful share of that apparent
+variability is actually unmodeled residual dependency, misattributed to
+the wrong place in <span class="math inline">\(\mathbf{G}\)</span>.</p>
+<p>This is the asymmetry worth remembering: <strong>a fixed-effect
+hypothesis test can come out well-calibrated using nothing but a rich
+<span class="math inline">\(\mathbf{G}\)</span>, because it only cares
+about the <em>total</em> variance behind the estimate; but if your
+actual research question is about the variance components
+themselves</strong> – how much people differ in level, or in trajectory,
+a reasonable and clinically meaningful question in rehabilitation
+research (Sections 2 and 8) – <strong>the G/R partition matters much
+more</strong>, because a model can pass a well-calibrated fixed-effect
+test while still giving a distorted answer to random effects.</p>
+</div>
+<div id="so-when-should-you-still-reach-for-nlme" class="section level3">
+<h3>6.6.4 So, When Should You Still Reach for <code>nlme</code>?</h3>
+<p>Putting this together, <code>nlme</code>’s explicit <span class="math inline">\(\mathbf{R}_i\)</span> modeling is most worth
+reaching for when:</p>
+<ul>
+<li><strong>The variance components are your actual research
+question</strong> – you want to report or interpret how much subjects
+differ in level or trajectory, not just test a fixed effect, and you
+need those estimates to reflect real between-subject differences rather
+than unmodeled residual dependency.</li>
+<li><strong>Your time structure doesn’t fit neatly into a low-order
+polynomial random-effects structure</strong> – e.g., truly irregular,
+continuous-time data like Section 2’s SCI dataset, where
+<code>corCAR1</code> handles the actual observation times directly,
+rather than approximating them through a random slope (and, per Section
+2’s own warning, high-order polynomial random effects bring their own
+collinearity problems as you add more terms).</li>
+<li><strong>You have a genuinely sparse <span class="math inline">\(\mathbf{G}\)</span></strong> (often just a random
+intercept) and reason to suspect real autocorrelation or
+heteroscedasticity beyond what compound symmetry can capture – exactly
+the situation described in Part 7.2 above, where a sparse <span class="math inline">\(\mathbf{G}\)</span> produced overconfident,
+anti-conservative inference about a time trend.</li>
+<li><strong>The dependency structure is itself the scientific
+finding</strong> – e.g., “does variability grow over time” is a claim
+about <span class="math inline">\(\mathbf{R}_i\)</span>, and answering
+it well requires modeling <span class="math inline">\(\mathbf{R}_i\)</span> directly rather than
+inferring it indirectly from how well a random-slope model happens to
+fit.</li>
+</ul>
+<p>And, as before, there’s a structural reason you can’t simply default
+to <code>nlme</code> for everything: <code>nlme</code> handles nested
+random effects gracefully but cannot fit fully <strong>crossed</strong>
+random effects at all (Section 8, participants crossed with
+items/stimuli), while <code>lme4</code> handles crossed random effects
+easily but cannot model residual correlation structures like
+<code>corAR1</code>. In practice: reach for <code>nlme</code> when you
+specifically need <span class="math inline">\(\mathbf{R}\)</span>-side
+structure for one of the four reasons above; reach for <code>lme4</code>
+(with as rich a <span class="math inline">\(\mathbf{G}\)</span> as your
+design supports) for crossed sampling units, and trust it more than you
+might expect for fixed-effect inference even with longitudinal
+dependency. If you need crossed random effects <em>and</em> explicit
+<span class="math inline">\(\mathbf{R}\)</span>-side structure at once,
+<code>glmmTMB</code> (Section 7) is increasingly a tool of choice, since
+it supports both within the same model.</p>
+</div>
+</div>
+<div id="summary" class="section level2">
+<h2>Summary</h2>
+<ul>
+<li><span class="math inline">\(\mathbf{G}\)</span> (random effects) and
+<span class="math inline">\(\mathbf{R}_i\)</span> (residuals) both
+contribute to <span class="math inline">\(\text{Var}(\mathbf{y}_i)\)</span>, and a
+sufficiently rich <span class="math inline">\(\mathbf{G}\)</span> – like
+the random-slope growth-curve models built in Sections 2 and 4 – can
+already capture a meaningful share of real autocorrelation, without ever
+touching <span class="math inline">\(\mathbf{R}_i\)</span>.
+<code>lme4</code>’s inability to model <span class="math inline">\(\mathbf{R}_i\)</span> directly is a real but
+narrow limitation, not a general inadequacy for longitudinal data.</li>
+<li>Fixed-effect point estimates are robust to how dependency is
+partitioned between <span class="math inline">\(\mathbf{G}\)</span> and
+<span class="math inline">\(\mathbf{R}_i\)</span>. Fixed-effect standard
+errors are <em>not</em> automatically robust to this – they tend to be
+well-calibrated when <span class="math inline">\(\mathbf{G}\)</span> is
+rich enough to approximate the true dependency (e.g., a random slope
+that can absorb “streaky,” time-correlated patterns), and can be
+meaningfully anti-conservative when <span class="math inline">\(\mathbf{G}\)</span> is sparse (e.g., if you only
+have a random intercept, which cannot represent anything beyond a
+constant, compound-symmetric correlation).</li>
+<li>The variance components themselves are considerably more sensitive
+to this partition than the fixed effects are – a model can pass a
+fixed-effect calibration check while still giving a biased answer to
+“how much do subjects differ,” because it achieved that calibration by
+misattributing dependency to the wrong variance component.</li>
+<li><code>nlme::lme()</code> lets you specify an explicit residual
+correlation structure (<code>correlation = corAR1(...)</code>,
+<code>corCAR1(...)</code>, <code>corCompSymm(...)</code>,
+<code>corSymm(...)</code>) and/or an explicit variance function
+(<code>weights = varIdent(...)</code>, among others) – reach for it when
+the variance components are your actual question, your time structure
+doesn’t fit a low-order polynomial random-effects structure, your <span class="math inline">\(\mathbf{G}\)</span> is sparse relative to the true
+dependency, or the dependency structure is itself the finding.</li>
+<li>Compare models sequentially with <code>anova()</code> (a
+nested-model likelihood-ratio test, just as we did for the unconditional
+growth models in Section 2) rather than jumping straight to the most
+complex structure.</li>
+<li>Misspecifying one piece of the covariance structure (e.g., leaving
+out heteroscedasticity) can bias your estimates of a different piece
+(e.g., the autocorrelation parameter) – inspect more than one diagnostic
+before concluding a model is “good enough.”</li>
+</ul>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Pinheiro, J., &amp; Bates, D. (2006). <em>Mixed-effects models in S
+and S-PLUS</em>. Springer.</p>
+<p>Pinheiro, J., Bates, D., &amp; R Core Team. (2022). nlme: Linear and
+Nonlinear Mixed Effects Models. <a href="https://CRAN.R-project.org/package=nlme" class="uri">https://CRAN.R-project.org/package=nlme</a></p>
+</div>
 
 
 
