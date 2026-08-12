@@ -1,11 +1,11 @@
 # mixed_effects_models
- Resources for creating mixed-effcts models as analogues for ANOVA and for truly longitudinal models.
+ Resources for creating mixed-effects models as analogues for ANOVA and for truly longitudinal models.
  <a href="https://zenodo.org/doi/10.5281/zenodo.10173822"><img src="https://zenodo.org/badge/237670474.svg" alt="DOI"></a>
 
-Sections 1-4 were part of the original repository accompanying our peer-reviewed manuscript
+Sections 1-3 were part of the original repository accompanying our peer-reviewed manuscript
 (Lohse, Kozlowski, & Strube, 2023, *Communications in Kinesiology*) as supplementary material.
 These sections have since been revised for clarity and updated code, but the changes are
-minimal relative to the published version. Sections 5-9 are brand new additions, extending
+minimal relative to the published version. Sections 4-9 are brand new additions, extending
 beyond the scope of the original manuscript, and were not part of the peer-reviewed material.
 
  Section 01 - Introduction to Mixed-Effects Models
