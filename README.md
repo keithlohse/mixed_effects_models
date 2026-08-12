@@ -38,5 +38,5 @@ beyond the scope of the original manuscript, and were not part of the peer-revie
     (Coming Soon)
 
  Further Readings and Recommendations
+ (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)
 
-    (https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html)
