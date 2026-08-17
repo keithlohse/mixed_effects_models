@@ -1,18 +1,20 @@
 ---
 title: "Applied Mixed-Effects Regresion Resources"
 author: "Keith Lohse, PhD, PStat; Mike Strube, PhD; Allan Kozlowksi, PhD, PT"
-date: "2022-10-04"
+date: "`r Sys.Date()`"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
 
 Resources for implementing mixed-effects models for different designs.
 
-Sections 1-4 were part of the original repository accompanying our peer-reviewed manuscript
+Sections 1-3 were part of the original repository accompanying our peer-reviewed manuscript
 (Lohse, Kozlowski, & Strube, 2023, *Communications in Kinesiology*) as supplementary material.
 These sections have since been revised for clarity and updated code, but the changes are
-minimal relative to the published version. Sections 5-9 are brand new additions, extending
+minimal relative to the published version. Sections 4-9 are brand new additions, extending
 beyond the scope of the original manuscript, and were not part of the peer-reviewed material.
  
   1. **Section 01** - Introduction to Mixed-Effects Models
