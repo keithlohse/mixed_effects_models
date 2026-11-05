@@ -1631,10 +1631,10 @@ Series within Factorial Designs</h1>
 
 <p>In this chapter, we are going to combine some of the concepts that we
 covered in <a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html">Section
-2</a>, on mixed-factorial designs, with <a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html">Section
-3</a>, on times series data. In combining these sections, we can see how
-we would analyze data when we have two time series that come from same
-person being measured at different times.</p>
+2</a> on longitudinal designs, with <a href="https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html">Section
+3</a>, on mixed-factorial designs. In combining these sections, we can
+see how we would analyze data when we have two time series that come
+from same person being measured at different times.</p>
 <p>In rehabilitation, for instance we might be interested in the rate at
 which a person with Parkinson’s disease acquires a skill when they are
 on or off dopamine-replacement medication. Alternately, we might be
@@ -1649,8 +1649,8 @@ A, B, and C).</p>
 <h1>1. Modeling Changes in Speed across 4 Trials, in 3 Different
 Conditions</h1>
 <p>To account for the fact that participants were tested under each of
-the three different conditions, we ideally want need a random slopes for
-time <em>within</em> subjects and <em>within</em> conditions. Given the
+the three different conditions, we ideally want a random slopes for time
+<em>within</em> subjects and <em>within</em> conditions. Given the
 curvilinear trajectory we see above, we also would - ideally - like to
 model linear and quadratic slopes. Putting this altogether into a
 “maximal” random-effects model would look something like this:</p>
@@ -1659,19 +1659,19 @@ mod_max&lt;-lmer(speed~
                   # Fixed-effects 
                   1+
                 time*condition*age_group+
-                time.sq*condition*age_group+ 
+                I(time^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time+time.sq|subID)+
-                  (1+time+time.sq|condition:subID),
+                  (1+time+I(time^2)|subID)+
+                  (1+time+I(time^2)|condition:subID),
                   data=DATA, REML=TRUE)</code></pre>
 <p>Before we fit the model, we will mean-center time to create a new
 variable time.c (<span class="math inline">\(time_i -
-\overline{time}\)</span>). Centering time around it’s mean changes the
-interpretation of the intercept from being the predicted value on Trial
-0 (which does exist) to the predicted value on average over time. (Note
-that the “average trial” also doesn’t exist, but has a more useful
-interpretation.) Critically, mean centering time serves two other
-functions:</p>
+\overline{time}\)</span>, where <span class="math inline">\(\overline{time}=2.5\)</span>). Centering time
+around its mean changes the interpretation of the intercept from being
+the predicted value on Trial 0 (which does not exist for Trials 1 to 4)
+to the predicted value at the mid-range of time, <span class="math inline">\(Trial=2.5\)</span>. (Note that Trial 2.5 also
+doesn’t exist for Trials 1 to 4, but has a more useful interpretation.)
+Critically, mean centering time serves two other functions:</p>
 <ol style="list-style-type: decimal">
 <li><p>With interactions in the model, if we mean center continuous
 variables and use “sum to zero” contrasts for categorical factors, then
@@ -1687,7 +1687,7 @@ time point. (See more about coding choices in <a href="https://keithlohse.github
 categorical factors can help reduce multicollinearity between our
 predictors, especially when polynomials or interactions are present. For
 instance, imagine <span class="math inline">\(Time=(1,2,3,4)\)</span>
-and <span class="math inline">\(Time^2=(1,2,9,16)\)</span>. Across
+and <span class="math inline">\(Time^2=(1,4,9,16)\)</span>. Across
 people these two sets of numbers are strongly correlated. However, if I
 center Time around its own mean of 2.5, then <span class="math inline">\(Time.c=(-1.5, -0.5, 0.5, 1.5)\)</span> and <span class="math inline">\(Time.c.sq=(2.25, 0.25, 0.25, 2.25)\)</span>.
 Across people these two sets of <em>mean-centered values</em> are
@@ -1698,81 +1698,82 @@ multicollinearity.</p></li>
 </ol>
 <pre class="r"><code># Maximal Random Slopes Model ---- 
 # set contrasts for factors to polynomials
-options(contrasts = c(&quot;contr.poly&quot;, &quot;contr.poly&quot;))
+options(contrasts = c(&quot;contr.sum&quot;, &quot;contr.poly&quot;))
 
 mod01&lt;-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
-                  (1+time.c+time.c.sq|condition:subID),
+                  (1+time.c+I(time.c^2)|subID)+
+                  (1+time.c+I(time.c^2)|condition:subID),
                   data=DATA, REML=TRUE)</code></pre>
 <pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
 <pre class="r"><code>summary(mod01)</code></pre>
 <pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
 ## lmerModLmerTest]
-## Formula: speed ~ 1 + time.c * condition * age_group + time.c.sq * condition *  
-##     age_group + (1 + time.c + time.c.sq | subID) + (1 + time.c +  
-##     time.c.sq | condition:subID)
+## Formula: 
+## speed ~ 1 + time.c * condition * age_group + I(time.c^2) * condition *  
+##     age_group + (1 + time.c + I(time.c^2) | subID) + (1 + time.c +  
+##     I(time.c^2) | condition:subID)
 ##    Data: DATA
 ## 
-## REML criterion at convergence: -443.3
+## REML criterion at convergence: -430.4
 ## 
 ## Scaled residuals: 
 ##     Min      1Q  Median      3Q     Max 
-## -2.3961 -0.4649 -0.0574  0.3358  4.9717 
+## -2.3962 -0.4649 -0.0575  0.3358  4.9717 
 ## 
 ## Random effects:
 ##  Groups          Name        Variance  Std.Dev. Corr        
-##  condition:subID (Intercept) 1.385e-03 0.037211             
-##                  time.c      5.676e-05 0.007534 -1.00       
-##                  time.c.sq   6.204e-05 0.007877  1.00 -1.00 
-##  subID           (Intercept) 1.159e-02 0.107662             
-##                  time.c      1.533e-03 0.039157  0.20       
-##                  time.c.sq   1.647e-03 0.040581 -0.47 -0.77 
-##  Residual                    1.184e-02 0.108800             
+##  condition:subID (Intercept) 1.385e-03 0.037216             
+##                  time.c      5.671e-05 0.007531 -1.00       
+##                  I(time.c^2) 6.199e-05 0.007873  1.00 -1.00 
+##  subID           (Intercept) 1.159e-02 0.107654             
+##                  time.c      1.533e-03 0.039158  0.20       
+##                  I(time.c^2) 1.647e-03 0.040580 -0.47 -0.77 
+##  Residual                    1.184e-02 0.108801             
 ## Number of obs: 480, groups:  condition:subID, 120; subID, 40
 ## 
 ## Fixed effects:
 ##                                     Estimate Std. Error         df t value
-## (Intercept)                        8.510e-01  1.909e-02  3.800e+01  44.572
-## time.c                            -1.283e-01  7.651e-03  3.800e+01 -16.773
-## condition.L                        3.527e-02  1.497e-02  1.274e+02   2.355
-## condition.Q                       -6.993e-02  1.497e-02  1.274e+02  -4.670
-## age_group.L                        1.361e-01  2.700e-02  3.800e+01   5.042
-## time.c.sq                          3.823e-02  8.145e-03  3.800e+01   4.693
-## time.c:condition.L                -2.316e-02  7.785e-03  2.263e+02  -2.975
-## time.c:condition.Q                 5.671e-02  7.785e-03  2.263e+02   7.284
-## time.c:age_group.L                -3.030e-02  1.082e-02  3.800e+01  -2.800
-## condition.L:age_group.L           -1.700e-02  2.118e-02  1.274e+02  -0.803
-## condition.Q:age_group.L            1.492e-02  2.118e-02  1.274e+02   0.705
-## condition.L:time.c.sq              3.536e-04  8.691e-03  2.364e+02   0.041
-## condition.Q:time.c.sq             -4.848e-03  8.691e-03  2.364e+02  -0.558
-## age_group.L:time.c.sq              1.859e-02  1.152e-02  3.800e+01   1.614
-## time.c:condition.L:age_group.L     1.335e-02  1.101e-02  2.263e+02   1.213
-## time.c:condition.Q:age_group.L    -9.007e-03  1.101e-02  2.263e+02  -0.818
-## condition.L:age_group.L:time.c.sq -1.700e-02  1.229e-02  2.364e+02  -1.383
-## condition.Q:age_group.L:time.c.sq  1.768e-02  1.229e-02  2.364e+02   1.439
+## (Intercept)                         0.850984   0.019091  38.000970  44.575
+## time.c                             -0.128325   0.007651  37.998853 -16.773
+## condition1                         -0.053484   0.012226 127.394237  -4.375
+## condition2                          0.057094   0.012226 127.394238   4.670
+## age_group1                         -0.096255   0.019091  38.000970  -5.042
+## I(time.c^2)                         0.038229   0.008145  38.000204   4.693
+## time.c:condition1                   0.039525   0.006356 226.286749   6.218
+## time.c:condition2                  -0.046300   0.006356 226.286749  -7.284
+## time.c:age_group1                   0.021425   0.007651  37.998853   2.800
+## condition1:age_group1              -0.012807   0.012226 127.394237  -1.048
+## condition2:age_group1               0.008615   0.012226 127.394237   0.705
+## condition1:I(time.c^2)             -0.002229   0.007096 236.401001  -0.314
+## condition2:I(time.c^2)              0.003958   0.007096 236.401001   0.558
+## age_group1:I(time.c^2)             -0.013146   0.008145  38.000204  -1.614
+## time.c:condition1:age_group1        0.009275   0.006356 226.286749   1.459
+## time.c:condition2:age_group1       -0.005200   0.006356 226.286749  -0.818
+## condition1:age_group1:I(time.c^2)  -0.013604   0.007096 236.401003  -1.917
+## condition2:age_group1:I(time.c^2)   0.010208   0.007096 236.401003   1.439
 ##                                   Pr(&gt;|t|)    
 ## (Intercept)                        &lt; 2e-16 ***
 ## time.c                             &lt; 2e-16 ***
-## condition.L                        0.02003 *  
-## condition.Q                       7.53e-06 ***
-## age_group.L                       1.17e-05 ***
-## time.c.sq                         3.44e-05 ***
-## time.c:condition.L                 0.00325 ** 
-## time.c:condition.Q                5.33e-12 ***
-## time.c:age_group.L                 0.00798 ** 
-## condition.L:age_group.L            0.42358    
-## condition.Q:age_group.L            0.48233    
-## condition.L:time.c.sq              0.96759    
-## condition.Q:time.c.sq              0.57750    
-## age_group.L:time.c.sq              0.11483    
-## time.c:condition.L:age_group.L     0.22656    
-## time.c:condition.Q:age_group.L     0.41418    
-## condition.L:age_group.L:time.c.sq  0.16793    
-## condition.Q:age_group.L:time.c.sq  0.15160    
+## condition1                        2.51e-05 ***
+## condition2                        7.54e-06 ***
+## age_group1                        1.16e-05 ***
+## I(time.c^2)                       3.44e-05 ***
+## time.c:condition1                 2.40e-09 ***
+## time.c:condition2                 5.33e-12 ***
+## time.c:age_group1                  0.00798 ** 
+## condition1:age_group1              0.29683    
+## condition2:age_group1              0.48234    
+## condition1:I(time.c^2)             0.75370    
+## condition2:I(time.c^2)             0.57750    
+## age_group1:I(time.c^2)             0.11482    
+## time.c:condition1:age_group1       0.14591    
+## time.c:condition2:age_group1       0.41418    
+## condition1:age_group1:I(time.c^2)  0.05643 .  
+## condition2:age_group1:I(time.c^2)  0.15160    
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
 <pre><code>## 
@@ -1783,13 +1784,13 @@ mod01&lt;-lmer(speed~
 ## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
 <pre class="r"><code>VarCorr(mod01)</code></pre>
 <pre><code>##  Groups          Name        Std.Dev.  Corr          
-##  condition:subID (Intercept) 0.0372113               
-##                  time.c      0.0075337 -1.000        
-##                  time.c.sq   0.0078768  1.000 -1.000 
-##  subID           (Intercept) 0.1076620               
-##                  time.c      0.0391573  0.196        
-##                  time.c.sq   0.0405813 -0.469 -0.766 
-##  Residual                    0.1088000</code></pre>
+##  condition:subID (Intercept) 0.0372163               
+##                  time.c      0.0075306 -1.000        
+##                  I(time.c^2) 0.0078732  1.000 -1.000 
+##  subID           (Intercept) 0.1076538               
+##                  time.c      0.0391582  0.196        
+##                  I(time.c^2) 0.0405802 -0.469 -0.766 
+##  Residual                    0.1088007</code></pre>
 <div id="troubleshooting-singular-fit-warnings-in-our-maximal-model" class="section level2">
 <h2>Troubleshooting Singular Fit Warnings in our Maximal Model</h2>
 <p>If you run the model above, you will see a “boundary (singular) fit”
@@ -1802,19 +1803,19 @@ including three separate correlation parameters) than these data can
 actually support (i.e., if I know your linear slope, I already know your
 quadratic slope, so I don’t need both terms.</p>
 <p>I will discuss a few different ways to troubleshoot this issue below,
-but first let’s talk about what random slopes are these different strata
+but first let’s talk about what random slopes these different strata
 represent:</p>
 <ul>
 <li><p><strong>The Person Stratum</strong> -
-<code>(1+time.c+time.c.sq|subID)</code>: Conceptually, including random
-slopes at this level is asking about how subjects change over time, on
-average, across conditions (i.e., does a person generally show a steep
-and shallow change across trials?). Covariances between these terms thus
-ask if, across people, e.g., higher intercepts are generally associated
-with higher slopes, beyond any group-level differences explained by the
-fixed effects.</p></li>
+<code>(1+time.c+I(time.c^2)|subID)</code>: Conceptually, including
+random slopes at this level is asking about how subjects change over
+time, on average, across conditions (i.e., does a person generally show
+a steep and shallow change across trials?). Covariances between these
+terms thus ask if, across people, e.g., higher intercepts are generally
+associated with higher slopes, beyond any group-level differences
+explained by the fixed effects.</p></li>
 <li><p><strong>The Condition Stratum</strong> -
-<code>(1+time.c+time.c.sq|condition:subID)</code>: Conceptually,
+<code>(1+time.c+I(time.c^2)|condition:subID)</code>: Conceptually,
 including random slopes at this level is asking about how subjects
 change over time in each specific condition, beyond and group-level
 differences explained by the fixed effects <em>and</em> beyond any
@@ -1822,7 +1823,7 @@ person-level differences captured by the level above. As such, we can
 think about these random slopes and intercepts as condition specific
 <em>deviates</em> from a subjects overall trajectory. Covariances
 between these terms then ask if, across people, e.g., higher intercepts
-deviates are generally associates with higher slopes deviates.</p></li>
+deviates are generally associated with higher slopes deviates.</p></li>
 </ul>
 <p>Examining the singular fit warning we saw above, it looks like there
 is important variance and covariance in these terms at the person
@@ -1847,20 +1848,20 @@ of <span class="math inline">\(Time\)</span>.</p>
 mod_1a&lt;-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1+time.c |condition:subID),
                   data=DATA, REML=TRUE)</code></pre>
 <pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
 <pre class="r"><code>VarCorr(mod_1a)</code></pre>
 <pre><code>##  Groups          Name        Std.Dev.  Corr          
-##  condition:subID (Intercept) 0.0468895               
-##                  time.c      0.0057456 -1.000        
-##  subID           (Intercept) 0.1062962               
-##                  time.c      0.0391780  0.197        
-##                  time.c.sq   0.0407379 -0.448 -0.775 
-##  Residual                    0.1092313</code></pre>
+##  condition:subID (Intercept) 0.0468894               
+##                  time.c      0.0057457 -1.000        
+##  subID           (Intercept) 0.1062958               
+##                  time.c      0.0391779  0.197        
+##                  I(time.c^2) 0.0407377 -0.448 -0.775 
+##  Residual                    0.1092314</code></pre>
 <p>In this case, our singular fit warning remains because even the
 linear effect of time is collinear with the intercept at the
 condition-level. Next, we will drop the linear slope for <span class="math inline">\(Time\)</span>, retaining only the random intercept
@@ -1869,9 +1870,9 @@ at the condition-level:</p>
 mod_1b&lt;-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1|condition:subID),
                   data=DATA, REML=TRUE)
 
@@ -1880,26 +1881,25 @@ VarCorr(mod_1b)</code></pre>
 ##  condition:subID (Intercept) 0.046601               
 ##  subID           (Intercept) 0.106276               
 ##                  time.c      0.039268  0.175        
-##                  time.c.sq   0.040677 -0.447 -0.774 
+##                  I(time.c^2) 0.040677 -0.447 -0.774 
 ##  Residual                    0.109504</code></pre>
 <p>This model converges without a singular fit warning, suggesting that
-our estimates are numerically stable enough that we can trust inferences
-about our fixed effects. That is, as you approach a boundary - either
-perfect covariance (+/- 1) or no variance (0) - the standard errors for
-fixed effect terms can change dramatically with even small differences
-in the random effect estimates.</p>
-<p>We can also show this empirically through AIC/BIC comparison across
-models (shown below), where <code>mod_1b</code> has the lowest AIC
-(<span class="math inline">\(-519\)</span>) with no random slopes at the
+our model is no longer over-parameterized (Matuschek et al., 2017; Bates
+et al., 2015 “Parsimonious mixed models”). We can also show this
+empirically through AIC/BIC comparison across models (shown below),
+where <code>mod_1b</code> has the lowest AIC (<span class="math inline">\(-519\)</span>) with no random slopes at the
 condition-level. This reinforces what the singularity warnings above
-were telling us; our data due not support the complexity of random
-slopes at the condition level. Conceptually, we can think about this as
-a relatively stable difference between people across conditions. That
-is, people tend to have relatively consistent trajectories across
+were telling us; our data do not support the complexity of random slopes
+at the condition level. Conceptually, we can think about this as a
+relatively stable difference between people across conditions. That is,
+people tend to have relatively consistent trajectories across
 conditions, so once we take that into account at the person-level
-(<code>(1+time.c+time.c.sq|subID)</code>), there is not evidence that
+(<code>(1+time.c+I(time.c^2)|subID)</code>), there is not evidence that
 trajectories consistently vary within people at the condition-level
-(<code>(1|condition:subID)</code>).</p>
+(<code>(1|condition:subID)</code>). Note that this is “absence of
+evidence” not “evidence of absence”; i.e., we have not proven that there
+is truly 0 variation between trajectories at the condition level (Bland
+Altman, 1995).</p>
 <pre class="r"><code># comparison across models
 anova(mod01, mod_1a, mod_1b)</code></pre>
 <pre><code>## refitting model(s) with ML (instead of REML)</code></pre>
@@ -1918,11 +1918,12 @@ degrees of freedom.</p>
 summary(mod_1b)</code></pre>
 <pre><code>## Linear mixed model fit by REML. t-tests use Satterthwaite&#39;s method [
 ## lmerModLmerTest]
-## Formula: speed ~ 1 + time.c * condition * age_group + time.c.sq * condition *  
-##     age_group + (1 + time.c + time.c.sq | subID) + (1 | condition:subID)
+## Formula: 
+## speed ~ 1 + time.c * condition * age_group + I(time.c^2) * condition *  
+##     age_group + (1 + time.c + I(time.c^2) | subID) + (1 | condition:subID)
 ##    Data: DATA
 ## 
-## REML criterion at convergence: -441.8
+## REML criterion at convergence: -428.9
 ## 
 ## Scaled residuals: 
 ##     Min      1Q  Median      3Q     Max 
@@ -1933,49 +1934,49 @@ summary(mod_1b)</code></pre>
 ##  condition:subID (Intercept) 0.002172 0.04660              
 ##  subID           (Intercept) 0.011295 0.10628              
 ##                  time.c      0.001542 0.03927   0.18       
-##                  time.c.sq   0.001655 0.04068  -0.45 -0.77 
+##                  I(time.c^2) 0.001655 0.04068  -0.45 -0.77 
 ##  Residual                    0.011991 0.10950              
 ## Number of obs: 480, groups:  condition:subID, 120; subID, 40
 ## 
 ## Fixed effects:
 ##                                     Estimate Std. Error         df t value
-## (Intercept)                        8.510e-01  1.909e-02  3.800e+01  44.575
-## time.c                            -1.283e-01  7.651e-03  3.800e+01 -16.773
-## condition.L                        3.527e-02  1.570e-02  2.246e+02   2.247
-## condition.Q                       -6.993e-02  1.570e-02  2.246e+02  -4.455
-## age_group.L                        1.361e-01  2.700e-02  3.800e+01   5.042
-## time.c.sq                          3.823e-02  8.145e-03  3.800e+01   4.693
-## time.c:condition.L                -2.316e-02  7.743e-03  2.720e+02  -2.991
-## time.c:condition.Q                 5.671e-02  7.743e-03  2.720e+02   7.323
-## time.c:age_group.L                -3.030e-02  1.082e-02  3.800e+01  -2.800
-## condition.L:age_group.L           -1.700e-02  2.220e-02  2.246e+02  -0.766
-## condition.Q:age_group.L            1.492e-02  2.220e-02  2.246e+02   0.672
-## condition.L:time.c.sq              3.536e-04  8.657e-03  2.720e+02   0.041
-## condition.Q:time.c.sq             -4.848e-03  8.657e-03  2.720e+02  -0.560
-## age_group.L:time.c.sq              1.859e-02  1.152e-02  3.800e+01   1.614
-## time.c:condition.L:age_group.L     1.335e-02  1.095e-02  2.720e+02   1.219
-## time.c:condition.Q:age_group.L    -9.007e-03  1.095e-02  2.720e+02  -0.822
-## condition.L:age_group.L:time.c.sq -1.700e-02  1.224e-02  2.720e+02  -1.389
-## condition.Q:age_group.L:time.c.sq  1.768e-02  1.224e-02  2.720e+02   1.444
+## (Intercept)                         0.850984   0.019091  38.000331  44.575
+## time.c                             -0.128325   0.007651  38.000672 -16.773
+## condition1                         -0.053484   0.012815 224.600350  -4.174
+## condition2                          0.057094   0.012815 224.600350   4.455
+## age_group1                         -0.096255   0.019091  38.000331  -5.042
+## I(time.c^2)                         0.038229   0.008145  38.000312   4.693
+## time.c:condition1                   0.039525   0.006322 271.998836   6.252
+## time.c:condition2                  -0.046300   0.006322 271.998836  -7.323
+## time.c:age_group1                   0.021425   0.007651  38.000672   2.800
+## condition1:age_group1              -0.012807   0.012815 224.600350  -0.999
+## condition2:age_group1               0.008615   0.012815 224.600350   0.672
+## condition1:I(time.c^2)             -0.002229   0.007068 271.998836  -0.315
+## condition2:I(time.c^2)              0.003958   0.007068 271.998836   0.560
+## age_group1:I(time.c^2)             -0.013146   0.008145  38.000312  -1.614
+## time.c:condition1:age_group1        0.009275   0.006322 271.998836   1.467
+## time.c:condition2:age_group1       -0.005200   0.006322 271.998836  -0.822
+## condition1:age_group1:I(time.c^2)  -0.013604   0.007068 271.998836  -1.925
+## condition2:age_group1:I(time.c^2)   0.010208   0.007068 271.998836   1.444
 ##                                   Pr(&gt;|t|)    
 ## (Intercept)                        &lt; 2e-16 ***
 ## time.c                             &lt; 2e-16 ***
-## condition.L                        0.02561 *  
-## condition.Q                       1.32e-05 ***
-## age_group.L                       1.16e-05 ***
-## time.c.sq                         3.44e-05 ***
-## time.c:condition.L                 0.00304 ** 
-## time.c:condition.Q                2.75e-12 ***
-## time.c:age_group.L                 0.00798 ** 
-## condition.L:age_group.L            0.44454    
-## condition.Q:age_group.L            0.50213    
-## condition.L:time.c.sq              0.96745    
-## condition.Q:time.c.sq              0.57594    
-## age_group.L:time.c.sq              0.11482    
-## time.c:condition.L:age_group.L     0.22385    
-## time.c:condition.Q:age_group.L     0.41151    
-## condition.L:age_group.L:time.c.sq  0.16610    
-## condition.Q:age_group.L:time.c.sq  0.14983    
+## condition1                        4.29e-05 ***
+## condition2                        1.32e-05 ***
+## age_group1                        1.16e-05 ***
+## I(time.c^2)                       3.44e-05 ***
+## time.c:condition1                 1.56e-09 ***
+## time.c:condition2                 2.75e-12 ***
+## time.c:age_group1                  0.00798 ** 
+## condition1:age_group1              0.31868    
+## condition2:age_group1              0.50213    
+## condition1:I(time.c^2)             0.75272    
+## condition2:I(time.c^2)             0.57594    
+## age_group1:I(time.c^2)             0.11482    
+## time.c:condition1:age_group1       0.14352    
+## time.c:condition2:age_group1       0.41151    
+## condition1:age_group1:I(time.c^2)  0.05532 .  
+## condition2:age_group1:I(time.c^2)  0.14983    
 ## ---
 ## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</code></pre>
 <pre><code>## 
@@ -1986,12 +1987,12 @@ summary(mod_1b)</code></pre>
 anova(mod_1b)</code></pre>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"3.373460273","2":"3.373460273","3":"1","4":"38.00067","5":"281.3311033","6":"3.718499e-19","_rn_":"time.c"},{"1":"0.298554655","2":"0.149277327","3":"2","4":"224.60035","5":"12.4490440","6":"7.458745e-06","_rn_":"condition"},{"1":"0.304816105","2":"0.304816105","3":"1","4":"38.00033","5":"25.4202641","6":"1.164842e-05","_rn_":"age_group"},{"1":"0.264137233","2":"0.264137233","3":"1","4":"38.00031","5":"22.0278329","6":"3.443072e-05","_rn_":"time.c.sq"},{"1":"0.750363250","2":"0.375181625","3":"2","4":"271.99884","5":"31.2884255","6":"5.887556e-13","_rn_":"time.c:condition"},{"1":"0.094036142","2":"0.094036142","3":"1","4":"38.00067","5":"7.8421826","6":"7.980710e-03","_rn_":"time.c:age_group"},{"1":"0.012452546","2":"0.006226273","3":"2","4":"224.60035","5":"0.5192426","6":"5.956835e-01","_rn_":"condition:age_group"},{"1":"0.003780417","2":"0.001890208","3":"2","4":"271.99884","5":"0.1576347","6":"8.542397e-01","_rn_":"condition:time.c.sq"},{"1":"0.031233194","2":"0.031233194","3":"1","4":"38.00031","5":"2.6047050","6":"1.148216e-01","_rn_":"age_group:time.c.sq"},{"1":"0.025934250","2":"0.012967125","3":"2","4":"271.99884","5":"1.0813987","6":"3.405743e-01","_rn_":"time.c:condition:age_group"},{"1":"0.048130417","2":"0.024065208","3":"2","4":"271.99884","5":"2.0069279","6":"1.363863e-01","_rn_":"condition:age_group:time.c.sq"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["Sum Sq"],"name":[1],"type":["dbl"],"align":["right"]},{"label":["Mean Sq"],"name":[2],"type":["dbl"],"align":["right"]},{"label":["NumDF"],"name":[3],"type":["int"],"align":["right"]},{"label":["DenDF"],"name":[4],"type":["dbl"],"align":["right"]},{"label":["F value"],"name":[5],"type":["dbl"],"align":["right"]},{"label":["Pr(>F)"],"name":[6],"type":["dbl"],"align":["right"]}],"data":[{"1":"3.373460240","2":"3.373460240","3":"1","4":"38.00067","5":"281.3311008","6":"3.718500e-19","_rn_":"time.c"},{"1":"0.298554655","2":"0.149277327","3":"2","4":"224.60035","5":"12.4490440","6":"7.458745e-06","_rn_":"condition"},{"1":"0.304816103","2":"0.304816103","3":"1","4":"38.00033","5":"25.4202640","6":"1.164842e-05","_rn_":"age_group"},{"1":"0.264137220","2":"0.264137220","3":"1","4":"38.00031","5":"22.0278318","6":"3.443073e-05","_rn_":"I(time.c^2)"},{"1":"0.750363250","2":"0.375181625","3":"2","4":"271.99884","5":"31.2884255","6":"5.887556e-13","_rn_":"time.c:condition"},{"1":"0.094036140","2":"0.094036140","3":"1","4":"38.00067","5":"7.8421825","6":"7.980711e-03","_rn_":"time.c:age_group"},{"1":"0.012452546","2":"0.006226273","3":"2","4":"224.60035","5":"0.5192426","6":"5.956835e-01","_rn_":"condition:age_group"},{"1":"0.003780417","2":"0.001890208","3":"2","4":"271.99884","5":"0.1576347","6":"8.542397e-01","_rn_":"condition:I(time.c^2)"},{"1":"0.031233192","2":"0.031233192","3":"1","4":"38.00031","5":"2.6047049","6":"1.148216e-01","_rn_":"age_group:I(time.c^2)"},{"1":"0.025934250","2":"0.012967125","3":"2","4":"271.99884","5":"1.0813987","6":"3.405743e-01","_rn_":"time.c:condition:age_group"},{"1":"0.048130417","2":"0.024065208","3":"2","4":"271.99884","5":"2.0069279","6":"1.363863e-01","_rn_":"condition:age_group:I(time.c^2)"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
 </div>
-<div id="forcing-random-effects-to-be-orthogonal-i.e.-0-covariance" class="section level2">
-<h2>Forcing Random Effects to be Orthogonal (i.e., 0 Covariance)</h2>
+<div id="forcing-random-effects-to-be-uncorrelated-i.e.-0-covariance" class="section level2">
+<h2>Forcing Random Effects to be Uncorrelated (i.e., 0 Covariance)</h2>
 <p>An alternative strategy to dropping higher order random effects is to
 force their covariances to be 0; that is, we can force all of our random
 slopes and intercepts to be independent of each other. We can do this
@@ -2001,25 +2002,25 @@ our random effects:</p>
 mod_orth&lt;-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
-                  (1+time.c+time.c.sq||condition:subID),
+                  (1+time.c+I(time.c^2)|subID)+
+                  (1+time.c+I(time.c^2)||condition:subID),
                   data=DATA, REML=TRUE)</code></pre>
 <pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
 <pre class="r"><code>VarCorr(mod_orth)</code></pre>
-<pre><code>##  Groups            Name        Std.Dev. Corr          
-##  condition.subID   time.c.sq   0.000000               
-##  condition.subID.1 time.c      0.000000               
-##  condition.subID.2 (Intercept) 0.046602               
-##  subID             (Intercept) 0.106287               
-##                    time.c      0.039275  0.175        
-##                    time.c.sq   0.040683 -0.447 -0.775 
-##  Residual                      0.109502</code></pre>
+<pre><code>##  Groups            Name        Std.Dev.   Corr          
+##  condition.subID   I(time.c^2) 2.4451e-06               
+##  condition.subID.1 time.c      0.0000e+00               
+##  condition.subID.2 (Intercept) 4.6602e-02               
+##  subID             (Intercept) 1.0627e-01               
+##                    time.c      3.9269e-02  0.175        
+##                    I(time.c^2) 4.0676e-02 -0.447 -0.774 
+##  Residual                      1.0950e-01</code></pre>
 <p>Note that we still get a singular fit warning, but the source of the
-problem has shifted. Before, we were getting perfectly postive or
+problem has shifted. Before, we were getting perfectly positive or
 negative <strong>co</strong>variances. Now, we have forced the random
-effects to be orthogonal, so there is no covariance, and instead the
+effects to be uncorrelated, so there is no covariance, and instead the
 variances are 0.</p>
 <p>Even if we drop the quadratic random effect at the condition level,
 we get a singular fit warning and the variance for <code>time.c</code>
@@ -2028,9 +2029,9 @@ at the condition level is estimated to be 0.</p>
 mod_orth&lt;-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1+time.c||condition:subID),
                   data=DATA, REML=TRUE)</code></pre>
 <pre><code>## boundary (singular) fit: see help(&#39;isSingular&#39;)</code></pre>
@@ -2040,17 +2041,27 @@ mod_orth&lt;-lmer(speed~
 ##  condition.subID.1 (Intercept) 0.046601               
 ##  subID             (Intercept) 0.106277               
 ##                    time.c      0.039268  0.175        
-##                    time.c.sq   0.040678 -0.448 -0.774 
+##                    I(time.c^2) 0.040678 -0.448 -0.774 
 ##  Residual                      0.109504</code></pre>
-<p>So, forcing the random effects to be orthogonal has not brought us to
-a different conclusion in this specific example, but that is not always
-the case. In many situations, forcing random effects to be independent
-might solve convergence/singular fit warnings while also allowing you to
-retain random slopes at different levels. In this particular case,
-however, there is simply not sufficient variability between conditions
-within a person - after the fixed effects and person-level variance is
-taken into account - to justify the added complexity of random slopes at
-the condition level.</p>
+<p>So, forcing the random effects to be uncorrelated has not brought us
+to a different conclusion in this specific example, but that is not
+always the case. In many situations, forcing random effects to be
+independent might solve convergence/singular fit warnings while also
+allowing you to retain random slopes at different levels. In this
+particular case, however, there is simply not sufficient variability
+between conditions within a person - after the fixed effects and
+person-level variance is taken into account - to justify the added
+complexity of random slopes at the condition level.</p>
+</div>
+<div id="references" class="section level2">
+<h2>References</h2>
+<p>Altman DG, Bland JM. Absence of evidence is not evidence of absence.
+British Medical Journal. 1995 Aug 19;311(7003):485-6.</p>
+<p>Bates D, Kliegl R, Vasishth S, Baayen H. Parsimonious mixed models.
+arXiv preprint arXiv:1506.04967. 2015 Jun 16.</p>
+<p>Matuschek H, Kliegl R, Vasishth S, Baayen H, Bates D. Balancing Type
+I error and power in linear mixed models. Journal of memory and
+language. 2017 Jun 1;94:305-15.</p>
 </div>
 </div>
 

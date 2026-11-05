@@ -8,7 +8,7 @@ output:
   pdf_document: default
 ---
 
-In this chapter, we are going to combine some of the concepts that we covered in [Section 2](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html), on mixed-factorial designs, with [Section 3](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html), on times series data. In combining these sections, we can see how we would analyze data when we have two time series that come from same person being measured at different times. 
+In this chapter, we are going to combine some of the concepts that we covered in [Section 2](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_02_longitudinal.html) on longitudinal designs, with [Section 3](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_03_factorial.html), on mixed-factorial designs. In combining these sections, we can see how we would analyze data when we have two time series that come from same person being measured at different times. 
 
 In rehabilitation, for instance we might be interested in the rate at which a person with Parkinson's disease acquires a skill when they are on or off dopamine-replacement medication. Alternately, we might be interested in hemibody differences between the left and right arms, or left and right legs, over time. 
 
@@ -23,19 +23,7 @@ DATA <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_mod
 # in the repository (404). "data_AGING_example.csv" has the same columns and works
 # with all of the code below.
 
-DATA$time.sq <- DATA$time^2
 DATA$time.c <- DATA$time-mean(DATA$time, na.rm=TRUE)
-DATA$time.c.sq <- DATA$time.c^2
-DATA$old.c<-ifelse(DATA$age_group=="YA", 0.5, -0.5)
-# NOTE (2024 revision): the original line here was
-#   DATA$old.c<-(as.numeric(DATA$age_group)-1.5)*(-1)
-# This silently returns old.c = NA for every row under R >= 4.0, because read.csv() no
-# longer defaults to stringsAsFactors=TRUE (that default changed in R 4.0.0, 2020), so
-# age_group is read in as character rather than factor, and as.numeric() on a character
-# vector like "OA"/"YA" returns NA (with a "NAs introduced by coercion" warning) rather
-# than the intended 1/2 factor codes. The explicit ifelse() above is also more
-# transparent pedagogically: it doesn't rely on knowing that R would have alphabetized
-# "OA" before "YA" to land on the intended (-0.5/+0.5) contrast-style coding.
 ```
 
 ``` {r plotting the effects of time, echo=FALSE, fig.align="center", warning=FALSE, fig.width=9}
@@ -62,7 +50,7 @@ ggplot(DATA, aes(x = time, y = speed)) +
 
 
 # 1. Modeling Changes in Speed across 4 Trials, in 3 Different Conditions
-To account for the fact that participants were tested under each of the three different conditions, we ideally want need a random slopes for time *within* subjects and *within* conditions. Given the curvilinear trajectory we see above, we also would - ideally - like to model linear and quadratic slopes. Putting this altogether into a "maximal" random-effects model would look something like this:
+To account for the fact that participants were tested under each of the three different conditions, we ideally want a random slopes for time *within* subjects and *within* conditions. Given the curvilinear trajectory we see above, we also would - ideally - like to model linear and quadratic slopes. Putting this altogether into a "maximal" random-effects model would look something like this:
 
 ```{r, eval=FALSE}
 # Fixed slope random intercepts model ---- 
@@ -70,32 +58,32 @@ mod_max<-lmer(speed~
                   # Fixed-effects 
                   1+
                 time*condition*age_group+
-                time.sq*condition*age_group+ 
+                I(time^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time+time.sq|subID)+
-                  (1+time+time.sq|condition:subID),
+                  (1+time+I(time^2)|subID)+
+                  (1+time+I(time^2)|condition:subID),
                   data=DATA, REML=TRUE)
 ```
 
 
-Before we fit the model, we will mean-center time to create a new variable time.c ($time_i - \overline{time}$). Centering time around it's mean changes the interpretation of the intercept from being the predicted value on Trial 0 (which does exist) to the predicted value on average over time. (Note that the "average trial" also doesn't exist, but has a more useful interpretation.) Critically, mean centering time serves two other functions: 
+Before we fit the model, we will mean-center time to create a new variable time.c ($time_i - \overline{time}$, where $\overline{time}=2.5$). Centering time around its mean changes the interpretation of the intercept from being the predicted value on Trial 0 (which does not exist for Trials 1 to 4) to the predicted value at the mid-range of time, $Trial=2.5$. (Note that Trial 2.5 also doesn't exist for Trials 1 to 4, but has a more useful interpretation.) Critically, mean centering time serves two other functions: 
 
 1. With interactions in the model, if we mean center continuous variables and use "sum to zero" contrasts for categorical factors, then our results will reflect "main effect" (rather than simple effects) and interactions familiar to many people who have used ANOVA in the past. That is, when 0 = "on average across time" then the Group x Condition interaction can be interpreted as "on average across time"; whereas if 0 = the first time point, then the Group x Condition interaction is actually a special case of that interaction being evaluated at the first time point. (See more about coding choices in [Section 5](https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_05_posthocTesting.html)).
 
-2. Mean-centering our continuous predictors and contrast coding our categorical factors can help reduce multicollinearity between our predictors, especially when polynomials or interactions are present. For instance, imagine $Time=(1,2,3,4)$ and $Time^2=(1,2,9,16)$. Across people these two sets of numbers are strongly correlated. However, if I center Time around its own mean of 2.5, then $Time.c=(-1.5, -0.5, 0.5, 1.5)$ and $Time.c.sq=(2.25, 0.25, 0.25, 2.25)$. Across people these two sets of *mean-centered values* are uncorrelated. It gets more complicated than that (e.g., linear and cubic terms will still be correlated following mean centering), but I hope this token example helps to show how mean centering can fight multicollinearity.  
+2. Mean-centering our continuous predictors and contrast coding our categorical factors can help reduce multicollinearity between our predictors, especially when polynomials or interactions are present. For instance, imagine $Time=(1,2,3,4)$ and $Time^2=(1,4,9,16)$. Across people these two sets of numbers are strongly correlated. However, if I center Time around its own mean of 2.5, then $Time.c=(-1.5, -0.5, 0.5, 1.5)$ and $Time.c.sq=(2.25, 0.25, 0.25, 2.25)$. Across people these two sets of *mean-centered values* are uncorrelated. It gets more complicated than that (e.g., linear and cubic terms will still be correlated following mean centering), but I hope this token example helps to show how mean centering can fight multicollinearity.  
 
 ```{r}
 # Maximal Random Slopes Model ---- 
 # set contrasts for factors to polynomials
-options(contrasts = c("contr.poly", "contr.poly"))
+options(contrasts = c("contr.sum", "contr.poly"))
 
 mod01<-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
-                  (1+time.c+time.c.sq|condition:subID),
+                  (1+time.c+I(time.c^2)|subID)+
+                  (1+time.c+I(time.c^2)|condition:subID),
                   data=DATA, REML=TRUE)
 
 summary(mod01)
@@ -107,11 +95,11 @@ VarCorr(mod01)
 ## Troubleshooting Singular Fit Warnings in our Maximal Model
 If you run the model above, you will see a "boundary (singular) fit" warning. Looking at `VarCorr(mod01)` or the random effects part of the `summary()` output shows why: the estimated correlation between the random slopes and intercepts within `condition:subID` are all perfectly $+/-1.00$, meaning the model is trying to estimate more structure (a full 3x3 variance-covariance matrix, including three separate correlation parameters) than these data can actually support (i.e., if I know your linear slope, I already know your quadratic slope, so I don't need both terms. 
 
-I will discuss a few different ways to troubleshoot this issue below, but first let's talk about what random slopes are these different strata represent:
+I will discuss a few different ways to troubleshoot this issue below, but first let's talk about what random slopes these different strata represent:
 
-* **The Person Stratum** - `(1+time.c+time.c.sq|subID)`: Conceptually, including random slopes at this level is asking about how subjects change over time, on average, across conditions (i.e., does a person generally show a steep and shallow change across trials?). Covariances between these terms thus ask if, across people, e.g., higher intercepts are generally associated with higher slopes, beyond any group-level differences explained by the fixed effects. 
+* **The Person Stratum** - `(1+time.c+I(time.c^2)|subID)`: Conceptually, including random slopes at this level is asking about how subjects change over time, on average, across conditions (i.e., does a person generally show a steep and shallow change across trials?). Covariances between these terms thus ask if, across people, e.g., higher intercepts are generally associated with higher slopes, beyond any group-level differences explained by the fixed effects. 
 
-* **The Condition Stratum** - `(1+time.c+time.c.sq|condition:subID)`: Conceptually, including random slopes at this level is asking about how subjects change over time in each specific condition, beyond and group-level differences explained by the fixed effects *and* beyond any person-level differences captured by the level above. As such, we can think about these random slopes and intercepts as condition specific *deviates* from a subjects overall trajectory. Covariances between these terms then ask if, across people, e.g., higher intercepts deviates are generally associates with higher slopes deviates.  
+* **The Condition Stratum** - `(1+time.c+I(time.c^2)|condition:subID)`: Conceptually, including random slopes at this level is asking about how subjects change over time in each specific condition, beyond and group-level differences explained by the fixed effects *and* beyond any person-level differences captured by the level above. As such, we can think about these random slopes and intercepts as condition specific *deviates* from a subjects overall trajectory. Covariances between these terms then ask if, across people, e.g., higher intercepts deviates are generally associated with higher slopes deviates.  
 
 
 Examining the singular fit warning we saw above, it looks like there is important variance and covariance in these terms at the person stratum, but we are not able to successfully estimate this variance in the condition stratum. Below, we will walk through a few strategies for troubleshooting this singular fit and explaining what this does to our estimates of the (co)variance at each level. 
@@ -126,9 +114,9 @@ Given that random effects at the person-level converged just fine, let's focus o
 mod_1a<-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1+time.c |condition:subID),
                   data=DATA, REML=TRUE)
 
@@ -143,18 +131,16 @@ In this case, our singular fit warning remains because even the linear effect of
 mod_1b<-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1|condition:subID),
                   data=DATA, REML=TRUE)
 
 VarCorr(mod_1b)
 ```
 
-This model converges without a singular fit warning, suggesting that our estimates are numerically stable enough that we can trust inferences about our fixed effects. That is, as you approach a boundary - either perfect covariance (+/- 1) or no variance (0) - the standard errors for fixed effect terms can change dramatically with even small differences in the random effect estimates.
-
-We can also show this empirically through AIC/BIC comparison across models (shown below), where `mod_1b` has the lowest AIC ($-519$) with no random slopes at the condition-level. This reinforces what the singularity warnings above were telling us; our data due not support the complexity of random slopes at the condition level. Conceptually, we can think about this as a relatively stable difference between people across conditions. That is, people tend to have relatively consistent trajectories across conditions, so once we take that into account at the person-level (`(1+time.c+time.c.sq|subID)`), there is not evidence that trajectories consistently vary within people at the condition-level (`(1|condition:subID)`). 
+This model converges without a singular fit warning, suggesting that our model is no longer over-parameterized (Matuschek et al., 2017; Bates et al., 2015 “Parsimonious mixed models”). We can also show this empirically through AIC/BIC comparison across models (shown below), where `mod_1b` has the lowest AIC ($-519$) with no random slopes at the condition-level. This reinforces what the singularity warnings above were telling us; our data do not support the complexity of random slopes at the condition level. Conceptually, we can think about this as a relatively stable difference between people across conditions. That is, people tend to have relatively consistent trajectories across conditions, so once we take that into account at the person-level (`(1+time.c+I(time.c^2)|subID)`), there is not evidence that trajectories consistently vary within people at the condition-level (`(1|condition:subID)`). Note that this is "absence of evidence" not "evidence of absence"; i.e., we have not proven that there is truly 0 variation between trajectories at the condition level (Bland Altman, 1995). 
 
 ```{r}
 # comparison across models
@@ -177,7 +163,7 @@ anova(mod_1b)
 
 
 
-## Forcing Random Effects to be Orthogonal (i.e., 0 Covariance)
+## Forcing Random Effects to be Uncorrelated (i.e., 0 Covariance)
 An alternative strategy to dropping higher order random effects is to force their covariances to be 0; that is, we can force all of our random slopes and intercepts to be independent of each other. We can do this using the `||` operator in `lme4` when specifying our random effects:
 
 ```{r}
@@ -185,16 +171,16 @@ An alternative strategy to dropping higher order random effects is to force thei
 mod_orth<-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
-                  (1+time.c+time.c.sq||condition:subID),
+                  (1+time.c+I(time.c^2)|subID)+
+                  (1+time.c+I(time.c^2)||condition:subID),
                   data=DATA, REML=TRUE)
 
 VarCorr(mod_orth)
 
 ```
-Note that we still get a singular fit warning, but the source of the problem has shifted. Before, we were getting perfectly postive or negative **co**variances. Now, we have forced the random effects to be orthogonal, so there is no covariance, and instead the variances are 0. 
+Note that we still get a singular fit warning, but the source of the problem has shifted. Before, we were getting perfectly positive or negative **co**variances. Now, we have forced the random effects to be uncorrelated, so there is no covariance, and instead the variances are 0. 
 
 Even if we drop the quadratic random effect at the condition level, we get a singular fit warning and the variance for `time.c` at the condition level is estimated to be 0. 
 
@@ -203,9 +189,9 @@ Even if we drop the quadratic random effect at the condition level, we get a sin
 mod_orth<-lmer(speed~ 
                   # Fixed-effects 
                   1+time.c*condition*age_group+
-                  time.c.sq*condition*age_group+ 
+                  I(time.c^2)*condition*age_group+ 
                   # Random-effects 
-                  (1+time.c+time.c.sq|subID)+
+                  (1+time.c+I(time.c^2)|subID)+
                   (1+time.c||condition:subID),
                   data=DATA, REML=TRUE)
 
@@ -213,6 +199,17 @@ VarCorr(mod_orth)
 
 ```
 
-So, forcing the random effects to be orthogonal has not brought us to a different conclusion in this specific example, but that is not always the case. In many situations, forcing random effects to be independent might solve convergence/singular fit warnings while also allowing you to retain random slopes at different levels. In this particular case, however, there is simply not sufficient variability between conditions within a person - after the fixed effects and person-level variance is taken into account - to justify the added complexity of random slopes at the condition level. 
+So, forcing the random effects to be uncorrelated has not brought us to a different conclusion in this specific example, but that is not always the case. In many situations, forcing random effects to be independent might solve convergence/singular fit warnings while also allowing you to retain random slopes at different levels. In this particular case, however, there is simply not sufficient variability between conditions within a person - after the fixed effects and person-level variance is taken into account - to justify the added complexity of random slopes at the condition level. 
 
 
+
+
+
+
+
+## References
+Altman DG, Bland JM. Absence of evidence is not evidence of absence. British Medical Journal. 1995 Aug 19;311(7003):485-6.
+
+Bates D, Kliegl R, Vasishth S, Baayen H. Parsimonious mixed models. arXiv preprint arXiv:1506.04967. 2015 Jun 16.
+
+Matuschek H, Kliegl R, Vasishth S, Baayen H, Bates D. Balancing Type I error and power in linear mixed models. Journal of memory and language. 2017 Jun 1;94:305-15.
