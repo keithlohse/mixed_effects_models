@@ -43,12 +43,26 @@ $p$-value.
 By default, R represents an unordered factor using **treatment (dummy) coding**: one level is
 chosen as the reference (alphabetically first, unless you say otherwise), and every other
 level gets a column that is 1 for that level and 0 everywhere else. This is what has been
-happening, invisibly, in every model we've fit so far. Two alternatives come up constantly
-enough to be worth naming:
+happening, invisibly, in every model we've fit so far. 
+
+```{r}
+my_factor <- factor(c("A", "B", "C"))
+contrasts(my_factor) <- contr.treatment(3)
+contrasts(my_factor)
+```
+
+Two alternatives come up regularly enough to be worth naming:
 
 * **Sum (effects) coding** (`contr.sum`): each non-reference level is coded relative to the
   *grand mean* rather than to one specific reference level, and the coefficients sum to zero
-  across levels.
+  within each contrast code.
+
+```{r}
+my_factor <- factor(c("A", "B", "C"))
+contrasts(my_factor) <- contr.sum(3)
+contrasts(my_factor)
+```
+  
 * **Polynomial (orthogonal) coding** (`contr.poly`): built for **ordered** factors, decomposing
   the factor's effect into linear, quadratic, cubic, etc. trend components. This is R's own
   default for any factor you explicitly declare with `factor(..., ordered = TRUE)` --
@@ -56,6 +70,12 @@ enough to be worth naming:
   `c("contr.treatment", "contr.poly")`: the first element governs unordered factors, the
   second governs ordered ones. You get polynomial contrasts automatically for an ordered
   factor without changing anything.
+  
+```{r}
+my_factor <- factor(c("A", "B", "C"))
+contrasts(my_factor) <- contr.poly(3)
+contrasts(my_factor)
+```
 
 All of these coding schemes describe the *same* fitted regression surface (i.e., they are just
 different bases for representing the same set of group differences) so it's natural to
@@ -110,16 +130,16 @@ car::Anova(mod3_sum, type = 3, test.statistic = "F")
 ```
 
 Now `age_group` is genuinely different: F = 57.15 under treatment coding, F = 47.18 under sum
-coding -- and the sum-coded number is the one that agrees with `lmerTest::anova()` above. This
-is not a small-sample or unbalanced-data artifact, either -- `data_COND` is a perfectly
+coding - and the sum-coded number is the one that agrees with `lmerTest::anova()` above. This
+is not a small-sample or unbalanced-data artifact, either - `data_COND` is a perfectly
 balanced design (20 subjects per age group, equal cell sizes throughout), and the discrepancy
 still shows up. The reason is structural, not statistical: `car::Anova(type=3)`'s test for a
 lower-order term (like the main effect of `age_group`) is computed by dropping that term's
-columns while holding the interaction's columns fixed -- and because the interaction's columns
+columns while holding the interaction's columns fixed - and because the interaction's columns
 are literally built by multiplying the main-effect columns together, *how* those main-effect
 columns were coded changes what "holding the interaction fixed" even means. Treatment coding's
 columns are not centered (a reference level is coded 0, not $-0.5$), so they don't have the
-orthogonality property that makes this comparison well-behaved; sum and polynomial coding's
+"sum to zero" property that makes this comparison well-behaved; `sum` and `poly` coding
 columns do.
 
 `lmerTest::anova()` computes its Type III test in a way that sidesteps the problem of how categorical
@@ -134,11 +154,9 @@ cells), `lmerTest::anova()` continues to agree with itself under either coding s
 `car::Anova(type=3)` continues to require sum-style contrasts to match it. So the practical
 rule for *categorical* predictors is narrower than "always change your contrasts or everything
 breaks": it's specifically that **`car::Anova(type="III")` needs sum (or polynomial)
-contrasts to agree with what a factorial ANOVA -- or `lmerTest::anova()` -- would say**,
+contrasts to agree with what a factorial ANOVA - or `lmerTest::anova()` - would say**,
 whenever an interaction is present. If you only ever use `lmerTest::anova()` for your omnibus
-tests, as this repository has so far, you have been safe by accident. It's worth setting sum
-contrasts anyway, both for this reason and because (as we'll see next) the coding of *categorical* 
-factors does nothing to how *continuous* variables are represented in the model.
+tests, as this repository has so far, you have been safe by accident. It's worth setting sum or polynomial contrasts anyway, both for this reason and because (as we'll see next) the coding of *categorical* factors does nothing to how *continuous* variables are represented in the model.
 
 ## 5.4. Continuous Covariates: Centering Matters Even More
 
@@ -146,7 +164,7 @@ Contrast coding is a question specifically about *categorical* factors. A differ
 practice more consequential, version of the same underlying issue shows up whenever a
 *continuous* covariate is involved in an interaction -- and no amount of `options(contrasts=)`
 fixes it, because there's no factor and no contrast scheme involved at all. The relevant
-choice here is simply: where does the continuous variable's zero point sit?
+choice here is: where does the continuous variable's zero point sit?
 
 To see how much this matters, we'll simulate a small Group x Time growth-curve design --
 structurally identical to the models we built in Section 2, without any centering applied yet.
@@ -176,7 +194,7 @@ cat("\nCentered time.c, SAME Group coding, lmerTest::anova():\n")
 anova(m_centered)
 ```
 
-Group's coding never changed between these two models -- it's treatment coding both times.
+Group's coding never changed between these two models - it's treatment coding both times.
 The *only* thing that changed is where `time` sits relative to zero, and the `group` test
 swings from F = 16.27 to F = 68.38. `time` and `group:time`, meanwhile, are identical in both
 models. We can see exactly why by looking at the correlation among the fixed-effect estimates:
@@ -188,10 +206,14 @@ cat("\nCentered model:\n")
 round(cov2cor(vcov(m_centered)), 3)
 ```
 
-In the uncentered model, `group` and `group:time` are correlated at $-0.47$; after centering,
+Two things are happening here: 
+
+* First, changing what `Time=0` means has an influence on any variables that interact with time. For instance, when 0 = "the first time point", the simple effect of `group` of is being evaluated specifically at the first time point. In contrast, if 0 = "the average time", then the simple effect of `group` is being evaluated specifically at the middle of our `time` variable. 
+
+* Second, in the uncentered model, `group` and `group:time` are correlated at $-0.47$; after centering,
 that drops to $-0.03$. Uncentered, `time` never crosses zero, so the interaction column
 (`group` $\times$ `time`) is nearly a rescaled copy of the plain `group` column for any given
-subject -- the two terms are fighting over the same variance, and the model can no longer
+subject - the two terms are fighting over the same variance, and the model can no longer
 cleanly attribute it to one or the other. This is precisely the collinearity mechanism
 discussed in Section 9's diagnostics chapter, just showing up directly in an ANOVA table
 instead of a VIF number.
@@ -204,7 +226,7 @@ assessment is at time 0) and `year.c` (mean-centered via `scale()`).
 DAT2 <- read.csv("https://raw.githubusercontent.com/keithlohse/mixed_effects_models/master/data_SCI_longitudinal_example.csv",
                  stringsAsFactors = TRUE)
 DAT2$year.0 <- (DAT2$time - 1) / 12
-DAT2$year.c <- as.numeric(scale(DAT2$time, scale = FALSE))
+DAT2$year.c <- as.numeric(scale(DAT2$time, scale = FALSE)) / 12
 
 m_yr0 <- lmer(rasch_FIM ~ year.0 * AIS_grade + (1 + year.0 | subID), data = DAT2, REML = FALSE,
               control = lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 5e5)))
@@ -240,12 +262,17 @@ want to ask. That is, researchers are often interested in *main effects* and *in
 not *simple effects* and interactions. 
 
 * A *main effect* asks about the effect of Variable A on average across all levels 
-  of Variable B -- e.g., "does Group matter, on average, across the full range of 
+  of Variable B - e.g., "does Group matter, on average, across the full range of 
   Time we actually studied?" When Time is centered around it's own mean and there 
   is a Group x Time interaction in the model, then the effect of Group is "on average"
-  across time because on average is when `Time = 0`.
+  across time because on average is when `Time = 0`. 
+      * Caveat, strictly speaking this is only technically correct if time is linear. If you have
+      polynomials to capture higher-order effects of `time.c`, then `time.c=0` will always be at the
+      mid-point of the time variable, but may not be perfectly on average across time (e.g., assume
+      `time=(1,2,3,4)`, then `time.c=(-1.5, -0.5, 0.5, 1.5)` which sums to zero.
+      However,`$time.c^2$=(2.25, 0.25, 0.25, 2.25)`, which does not sum to zero).
 
-* A *simple effect asks about the effect of Variable A at a specific level of 
+* A *simple effect* asks about the effect of Variable A at a specific level of 
   Variable B -- e.g, "does Group matter at the very first observation at the beginning
   of our study?" If the first observation is coded as 0 and a Group x Time interaction is 
   included in the model, then the effect of Group is "at the beginning" because the 
@@ -328,7 +355,7 @@ that the omnibus test did. `emmeans` gives you the same two options we've alread
 * **Kenward-Roger**: adjusts the covariance matrix of the fixed effects for small-sample
   bias in addition to adjusting the degrees of freedom, which makes it a somewhat more
   conservative (and more computationally expensive) choice. It requires the `pbkrtest`
-  package, which `emmeans` and `lmerTest` will use automatically if it is installed.
+  package, which `emmeans` will use automatically if it is installed.
 
 For a single model, the two will typically agree quite closely; the difference matters most in
 small samples with a lot of missing data or unbalanced cell sizes.
@@ -423,16 +450,14 @@ of **simple effects**. We ask `emmeans` for this directly with the `|` (conditio
 
 ```{r simple-effects-group}
 emm_by_time <- emmeans(model_f5, ~ group | time)
-pairs_by_time <- pairs(emm_by_time, adjust = "sidak")
+pairs_by_time <- pairs(emm_by_time, adjust = "sidak", by = NULL)
 pairs_by_time
 ```
 
 Because we are only running three tests here (one per time point), the Sidak correction --
-slightly less conservative than Tukey's HSD -- is a reasonable choice, appropriate for 
+slightly more conservative than Tukey's HSD -- is a reasonable choice, appropriate for 
 a small pre-specified family of comparisons. The pattern is exactly what the interaction term
-predicted: the groups do not differ at baseline (as they shouldn't, since participants were
-randomized before treatment began), and a Control-Treatment gap opens up by the Post
-assessment and grows larger by Followup.
+predicted: the groups are not significantly different at baseline (which we would generally expect because participants were randomized before treatment began), and a Control-Treatment gap opens up by the Post assessment and grows larger by Followup.
 
 ### 5.10.3 Simple Effects: Comparing Time Points Within Each Group
 
@@ -441,7 +466,7 @@ time on its own:
 
 ```{r simple-effects-time}
 emm_by_group <- emmeans(model_f5, ~ time | group)
-pairs_by_group <- pairs(emm_by_group, adjust = "holm")
+pairs_by_group <- pairs(emm_by_group, adjust = "holm", by = NULL)
 pairs_by_group
 ```
 
@@ -451,7 +476,7 @@ supports several standard adjustment methods (`"tukey"`, `"sidak"`, `"holm"`, `"
 you want to be, not just default to whichever one you saw in the last paper you read. Personally, 
 I err on the side of not correcting, *but* transparently reporting all tests (see: Rothman, 1990; 
 Hoffman et al., 2026). I like this approach because it allows readers to decide 
-how conservative they want to be, but that sort of subjectivity is not always desirable 
+how conservative *they* want to be, but that sort of subjectivity is not always desirable 
 when statistical significance is being employed for decision making. 
 
 ## 5.11. Custom Contrasts
@@ -459,8 +484,7 @@ when statistical significance is being employed for decision making.
 Sometimes none of the "off-the-shelf" comparisons above are quite the question we actually
 want to ask. Suppose our real, pre-registered hypothesis was narrower than "do all time points
 differ": we specifically expected that **the Treatment group's Followup score would be lower
-than the average of its own Pre and Post scores** (i.e., that any initial treatment gains would
-be maintained, not reversed, by Followup). We can build that exact contrast by hand.
+than the average of its own Pre and Post scores**. We can build that exact contrast by hand.
 
 The key to writing a custom contrast is knowing the *order* that `emm_int` lists its cells in,
 because that is the order your weights need to line up with:
@@ -484,8 +508,8 @@ custom_contrast_list <- list(
 contrast(emm_int, custom_contrast_list)
 ```
 
-**A word of caution.** It is very easy to get a weight vector like this subtly wrong --
-swapping two adjacent weights, or forgetting that a level was dropped -- and `contrast()` will
+**A word of caution.** It is very easy to get a weight vector like this subtly wrong -
+swapping two adjacent weights, or forgetting that a level was dropped - and `contrast()` will
 not warn you, because from `emmeans`'s point of view any vector that sums to zero is a
 perfectly legitimate contrast; it has no way of knowing that isn't the comparison you meant to
 ask about. Always print the reference grid immediately before writing your weights (as we did
@@ -549,9 +573,9 @@ conditions, not a reversal of it.
   in balanced and unbalanced designs alike; `car::Anova(type="III")` is not, and needs sum (or
   polynomial) contrasts to agree with it once an interaction is present.
 * Centering matters even more, and for a different reason: any *continuous* covariate involved
-  in an interaction can distort the omnibus test of the other, lower-order term it interacts
-  with, in *any* of these functions, simply based on where its zero point happens to sit. This
-  can't be fixed by a contrasts option -- it has to be handled explicitly in your data (as
+  in an interaction changes which question is tested by the omnibus test of the other, lower-order term
+  it interacts with, in *any* of these functions, simply based on where its zero point happens to sit.
+  This can't be fixed by a contrasts option -- it has to be handled explicitly in your data (as
   `year.0`/`year.c`/`time.c` already do throughout this repository).
 * Both problems have the same root cause: a Type III test of a lower-order term, in the
   presence of an interaction, is implicitly a test "at" some reference point, and that

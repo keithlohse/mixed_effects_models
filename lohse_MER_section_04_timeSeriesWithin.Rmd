@@ -75,7 +75,7 @@ Before we fit the model, we will mean-center time to create a new variable time.
 ```{r}
 # Maximal Random Slopes Model ---- 
 # set contrasts for factors to polynomials
-options(contrasts = c("contr.sum", "contr.poly"))
+options(contrasts = c("contr.poly", "contr.poly"))
 
 mod01<-lmer(speed~ 
                   # Fixed-effects 
