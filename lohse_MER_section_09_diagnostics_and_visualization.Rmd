@@ -1,0 +1,280 @@
+---
+title: 'Section 9: Model Diagnostics for Mixed-Effects Models'
+author: "Keith Lohse, PhD, PStat"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+We have spent eight sections building progressively more sophisticated mixed-effects models,
+but we have not yet stopped to systematically ask: how do we know a model is any good? A
+model can converge, produce a tidy `summary()` table, and still be badly misspecified. This
+section works through a practical diagnostic checklist, and the specific plots used to carry
+each check out. Our focus here is deliberately narrow: this is about diagnostic visualization
+-- plots whose job is to help you decide whether a model is trustworthy -- not about general
+data visualization or building a polished figure to communicate a result to a reader. For
+guidance on the latter, a dedicated data-visualization reference is a better resource than this
+section.
+
+## 9.1. What Are We Actually Checking?
+
+Linear mixed-effects models rest on several distributional assumptions, extending the
+familiar ones from ordinary regression:
+
+1. **Additivity and Linearity**: I would more generally phrase this as "getting 
+   the mean structure correct". That is, we can fit curvilinear regressions with 
+   polynomials but remember that polynomials are additive and linear in their 
+   components (e.g., `time + I(time^2)`). Bottom line, if we fit linear `time` to 
+   a non-linear pattern, everything downstream from that is biased. 
+2. **Normality of residuals**: $\epsilon_{ij} \sim \mathcal{N}(0, \sigma^2)$.
+3. **Normality of random effects**: $\mathbf{b}_i \sim \mathcal{N}(\mathbf{0},
+   \boldsymbol{\Sigma}_b)$. The random slopes and intercepts, not just the residuals, should
+   also look roughly normal.
+4. **Homoscedasticity**: residual variance is roughly constant across the range of fitted
+   values and predictors (Section 6 covered what to do when this fails outright).
+
+And then we have two important *considerations* (not strcitly speaking assumptions)
+that we want to check:
+5. **No excessive collinearity** among the fixed-effect predictors, which inflates standard
+   errors and makes individual coefficients unstable even when the overall model fits well.
+6. **No single subject/cluster with disproportionate influence** on the fixed-effect
+   estimates.
+
+We'll fit one example model and then work through each of these in turn.
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+library(performance)
+library(DHARMa)
+library(influence.ME)
+```
+
+```{r fit-example-model}
+set.seed(456)
+n_sub <- 35
+df_diag <- expand.grid(
+  subID = factor(1:n_sub),
+  time  = 1:4
+) %>%
+  mutate(
+    # As in Section 7, note that group is assigned by SUBJECT (as.numeric(subID)),
+    # not by row order, so that it is a genuine between-subjects grouping factor.
+    group = factor(if_else(as.numeric(subID) <= n_sub / 2, "Placebo", "Drug")),
+    score = 20 + 2.5 * time + 3.0 * (group == "Drug") * time +
+      rnorm(n_sub, 0, 3)[subID] + rnorm(n(), 0, 1.5)
+  )
+
+mod_diag <- lmer(score ~ group * time + (1 + time | subID), data = df_diag)
+```
+
+## 2. An Automated First Pass: the `performance` Package
+
+The `performance` package (part of the `easystats` ecosystem) provides a single function,
+`check_model()`, that produces a full panel of standard diagnostic plots in one call:
+
+```{r check-model, fig.width=9, fig.height=9}
+check_model(mod_diag)
+```
+
+That panel is a good first pass, but it's worth also pulling out a few of its components
+individually, both because the individual functions give you numeric test statistics (not
+just plots) and because it's useful to know what each one is actually checking.
+
+```{r individual-diagnostics}
+check_singularity(mod_diag)     # Is the random-effects covariance matrix at a boundary?
+check_normality(mod_diag)       # Are the (Level-1) residuals approximately normal?
+```
+
+`check_singularity()` should look familiar: it's the same "boundary (singular) fit" issue we
+worked through in detail in Section 3, Part 5.3, just packaged as a convenience function so
+you don't have to inspect `VarCorr()` by hand every time.
+
+## 3. Collinearity: A Real Problem, Not Just a Box to Check
+
+```{r check-collinearity}
+check_collinearity(mod_diag)
+```
+
+With just a linear effect of `time`, this particular model's VIFs are all comfortably low -
+which is a fine result, but not a very interesting one to stop at. Collinearity problems in
+mixed models show up most often once you add a **polynomial** term, exactly as Section 2
+warned in passing: "if time is centered on the first observation... then higher polynomials
+will often be highly correlated, which can create convergence issues for the model." Let's
+actually see that happen, by adding a quadratic effect of time (and its interaction with
+`group`) to our model, the same way we did with `year.0_sq` back in Section 2:
+
+```{r check-collinearity-quadratic}
+mod_quad <- lmer(score ~ group * time + group * I(time^2) + (1 + time | subID), data = df_diag)
+check_collinearity(mod_quad)
+```
+
+Now we have a real problem: VIFs above 35 for `time`, `I(time^2)`, and their interactions
+with `group`. A VIF that large means the standard errors on these terms are roughly six
+times larger than they would be if the predictors were uncorrelated -- more than enough to
+turn a real effect into a "non-significant" one for reasons that have nothing to do with your
+actual sample size. This is happening for a simple, structural reason: `time` runs from 1 to
+4, never crossing zero, so `time` and `time^2` - and each of their interactions with `group`
+- end up numerically correlated with each other. Let's confirm the fix, mean-centering `time`
+first, exactly as Section 2 recommended:
+
+```{r fix-collinearity}
+df_diag <- df_diag %>% mutate(time.c = time - mean(time))
+mod_quad_centered <- lmer(score ~ group * time.c + group * I(time.c^2) + (1 + time.c | subID),
+                           data = df_diag)
+check_collinearity(mod_quad_centered)
+```
+
+Every VIF drops back into a comfortable range (all at or below 2.1). This is exactly the pattern Section 2 was warning you about in advance, made concrete: **centering matters most, and matters almost immediately, once
+polynomial or interaction terms enter the model** - it is worth doing by default, not just
+when a diagnostic tool happens to catch a problem after the fact. (You may also notice
+`performance`'s own warning above the table - *"Model has interaction terms. VIFs might be
+inflated"* - a reminder that VIFs computed in the presence of interaction terms are a known
+soft spot for this particular diagnostic; see Fox & Weisberg, already cited in the companion
+paper for this repository.)
+
+
+## 4. Are the Random Effects Themselves Normally Distributed?
+
+`check_model()` and `check_normality()` both focus on the residual's assumption. It's
+worth also checking the random effect normality assumption directly - are the estimated subject-level
+deviations (BLUPs) themselves roughly normal?
+
+```{r ranef-qq, fig.align="center", fig.width=5, fig.height=5}
+re_vals <- ranef(mod_diag)$subID
+
+qqnorm(re_vals$`(Intercept)`, main = "QQ Plot: Random Intercepts")
+qqline(re_vals$`(Intercept)`, col = "red")
+```
+
+With only 35 subjects, don't expect a perfectly straight line -- some wobble in the tails is
+normal at this sample size. What you're looking for is a *systematic* pattern (a clear curve,
+or one or two points wildly detached from the rest), not perfection.
+
+## 5. Influence Diagnostics: Is Any Single Subject Driving the Result?
+
+Every diagnostic so far has asked about the model's assumptions *in aggregate* -- is the
+overall distribution of residuals normal, is variance roughly constant. None of them ask a
+different, equally important question: is your result actually being driven by the model fit
+to all 35 subjects, or largely by one or two of them? A single subject with an unusual
+trajectory (a data-entry error, a genuinely atypical clinical course, a person for whom the
+protocol was not followed correctly) can sometimes swing a fixed-effect estimate on its own,
+even when nothing else about the model's residuals looks wrong.
+
+The logic behind detecting this is direct: refit the model once for every subject, each time
+leaving that one subject out, and see how much the fixed effects move. The `influence.ME`
+package automates exactly this (one refit per subject) and standardizes the result into
+familiar measures -- **Cook's Distance** (an overall summary of how much *all* the fixed
+effects shift when a subject is dropped) and **DFBETAS** (the same idea, broken out separately
+for each individual coefficient).
+
+To see what a genuinely influential subject looks like, we'll plant one: suppose Subject 3
+(assigned to the Drug group) has a data-entry error, or a genuinely atypical clinical course,
+such that their scores run sharply *downward* over time instead of upward like everyone
+else's:
+
+```{r plant-outlier}
+df_diag_check <- df_diag %>%
+  mutate(score = if_else(subID == "3", 40 - 6 * time, score))
+
+mod_diag_check <- lmer(score ~ group * time + (1 + time | subID), data = df_diag_check)
+```
+
+```{r influence-diagnostics}
+# influence.ME requires (and here we use) a random-intercepts model per grouping factor;
+# it works whether or not that model also has random slopes.
+infl <- influence(mod_diag_check, group = "subID")
+
+cooks_d <- cooks.distance(infl)
+head(round(cooks_d, 3))
+```
+
+A commonly-used rule of thumb flags a subject as worth a closer look if their Cook's Distance
+exceeds $4/n$ (here, $4/35 \approx 0.114$):
+
+```{r influence-cutoff}
+cutoff <- 4 / n_sub
+which(cooks_d > cutoff)
+```
+
+Subject 3 (Cook's D well above 1, versus everyone else comfortably under 0.1) is flagged
+immediately and unambiguously -- exactly as it should be, since we built it to be an extreme
+case. The next step is `dfbetas()`, which tells you *which* coefficient(s) that subject is
+actually distorting:
+
+```{r dfbetas}
+db <- dfbetas(infl)
+round(db["3", ], 3)
+```
+
+Here, the planted subject's DFBETAS is far larger for the `group:time` interaction ($-1.93$
+standard errors' worth of shift) than for the `group` main effect ($0.80$) -- this one subject
+is distorting our conclusion about whether the *groups' trajectories differ over time* much
+more than our conclusion about the groups' overall difference. In a real dataset, this is
+exactly the kind of pattern that should send you back to that specific subject's raw data
+before you trust the interaction term.
+
+Being flagged as influential is a prompt to look more closely, not an automatic reason to
+exclude a subject. Reasonable next steps include: checking that subject's raw data for
+entry errors, considering whether their result is substantively meaningful (a legitimately
+unusual clinical course is data, not noise), and reporting the fixed effects both with and
+without that subject if the conclusion genuinely depends on their inclusion. Refitting the
+whole model once per subject is not free computationally -- for very large samples or slow
+models, running `influence()` on a random subset of subjects first is a reasonable way to
+get a sense of whether this is worth pursuing further.
+
+## 6. You Don't Need a New Model to Practice This
+
+Everything in this section applies just as well to models you've already built earlier in this
+repository. As one example, revisit `cond_01` from Section 2 (the conditional growth model
+with AIS Grade predicting the shape of recovery over time):
+
+```{r reuse-section2, eval=FALSE}
+# From Section 2:
+#   cond_01 <- lmer(rasch_FIM~1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
+#                    (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE, ...)
+check_model(cond_01)
+check_collinearity(cond_01)
+influence(cond_01, group = "subID") %>% cooks.distance() %>% head()
+```
+
+Because `cond_01` includes three polynomial terms (`year.0`, `year.0_sq`, `year.0_cu`) each
+crossed with `AIS_grade`, we would actually expect `check_collinearity()` to flag some
+concerning VIFs here too, for exactly the same reason as Section 3 above -- another good
+argument for centering continuous predictors as a matter of habit, not just when a diagnostic
+tool happens to catch it. With 40 subjects providing repeated functional-independence scores
+over 18 months, `influence()` is also a genuinely useful check here: a single subject with an
+unusually steep or shallow recovery trajectory could plausibly be shaping the estimated shape
+of recovery for their whole AIS Grade.
+
+## Summary
+
+* `performance::check_model()` gives a fast first-pass diagnostic panel; `check_singularity()`,
+  `check_collinearity()`, and `check_normality()` let you pull out specific numeric checks.
+* High VIFs are not just a nuisance warning -- they represent a real loss of statistical power
+  on the affected coefficients, and are frequently caused by an uncentered continuous
+  predictor that's involved in an interaction (exactly as we saw here).
+* `DHARMa::simulateResiduals()` provides a diagnostic approach that works essentially
+  unchanged for GLMMs (Section 7), unlike diagnostics that assume Gaussian residuals.
+* Check the normality of the random effects (BLUPs) themselves, not just the Level-1 residuals.
+* `influence.ME::influence()` checks a different kind of problem entirely -- whether a single
+  subject/cluster is driving your fixed-effect estimates -- by systematically refitting the
+  model with each subject left out in turn; `cooks.distance()` flags which subjects to look at,
+  `dfbetas()` tells you which specific coefficients they're affecting.
+* These diagnostics are worth running on models you've already built in earlier sections, not
+  only on new ones -- `cond_01` from Section 2 is a good candidate to practice on.
+
+## References
+Lüdecke, D., Ben-Shachar, M. S., Patil, I., Waggoner, P., & Makowski, D. (2021). performance:
+An R Package for Assessment, Comparison and Testing of Statistical Models. *Journal of Open
+Source Software, 6*(60), 3139. https://doi.org/10.21105/joss.03139
+
+Hartig, F. (2022). DHARMa: Residual Diagnostics for Hierarchical (Multi-Level / Mixed)
+Regression Models. https://CRAN.R-project.org/package=DHARMa
+
+Nieuwenhuis, R., te Grotenhuis, M., & Pelzer, B. (2012). influence.ME: Tools for Detecting
+Influential Data in Mixed Effects Models. *The R Journal, 4*(2), 38-47.
+https://doi.org/10.32614/RJ-2012-011

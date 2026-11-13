@@ -1,0 +1,281 @@
+---
+title: 'Section 8: Crossed Random Effects (Participants and Stimuli/Items)'
+author: "Keith Lohse, PhD, PStat"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Every design we've analyzed in Sections 1-7 has had a single random-sampling unit:
+participants. But in a wide range of rehabilitation research, the measurement *instrument*
+itself is also a sample from a larger population, not fixed and exhaustively enumerated. Two
+examples that come up constantly:
+
+* In **speech-language pathology**, a confrontation-naming or word-reading task presents
+  participants with some number of specific words (or pictures to be named). Those particular
+  words are a sample from a much larger population of possible words you could have used to
+  test the same underlying ability, in exactly the same sense that your participants are a
+  sample from a larger population of possible participants.
+* In **health-professions education** (e.g., a DPT program's written exams or OSCEs), a given
+  test is made up of some number of specific items. Those items are themselves a sample from a
+  much larger population of possible questions you could have written to assess the same competency -
+  a different cohort's exam, covering the identical learning objectives, would use different
+  wording and different specific scenarios.
+
+The companion paper for this repository already introduced this idea directly, in almost
+exactly the speech-pathology framing above (see "Variation in Multiple Crossed Factors,"
+which models a linguistic word-recognition experiment with random intercepts for both
+`subject` and `stimulus`). This section builds that idea out into a full worked example set in
+a "confrontation-naming" task, so named because a participant is "confronted" with a 
+specific stimulus and is asked to name it (e.g., the Boston Naming Task). 
+Crossed designs like this come up often enough - and are confusing enough - to 
+deserve an expanded treatment. Everything here applies just as directly to the
+DPT-assessment scenario with random effects like (`(1|student) + (1|item)` 
+in place of `(1|participant) + (1|word)`), and we come back to that parallel 
+at the end of the section.
+
+## 1. Nested vs. Crossed Random Effects (A Quick Refresher)
+
+We introduced nested and crossed random effects back in Section 3:
+
+* **Fully Nested**: every level of one factor belongs to exactly one level of another (e.g., a
+  patient belongs to exactly one clinic).
+* **Fully Crossed**: every level of one factor is paired with every level of another (e.g., every
+  participant responds to every word).
+
+When participants and items are fully crossed and you ignore the item side of that structure
+- either by treating items as fixed effects, or (worse) by averaging over them - you commit
+what Clark (1973) named **the language-as-fixed-effect fallacy**. Despite the name, this is not
+only a linguistics problem: it applies exactly the same way to a DPT exam with a specific bank
+of items, or a balance-assessment protocol built from a specific set of perturbation trials.
+Treating a random sample of items as if it exhausted the population you actually care about
+inflates your false-positive rate, sometimes dramatically - simulations in this literature
+(e.g., Judd, Westfall, & Yarkoni, 2012) have shown nominal 5% error rates climbing as high as
+30-50% once you have a reasonably-sized bank of items and ignore the variability between them.
+
+## 2. Simulating a Crossed Design: Confrontation Naming in Aphasia
+
+Consider a confrontation-naming study: 32 people with aphasia are each asked to name 40
+pictured objects, and every participant attempts every picture (a fully crossed design). Half
+of the pictures have high-frequency names (e.g., "dog", "chair") and half have low-frequency
+names (e.g., "anchor", "trellis"). Word frequency is one of the most robustly replicated
+predictors of naming performance in the aphasiology literature, so it's a reasonable fixed effect
+of interest. The outcome is naming latency, in milliseconds, on trials the participant names
+correctly.
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lme4)
+library(lmerTest)
+```
+
+```{r simulate-crossed-data}
+set.seed(789)
+n_participants <- 32   # people with aphasia
+n_words        <- 40   # pictured items, sampled from a much larger pool of nameable objects
+
+df_crossed <- expand.grid(
+  participant = factor(paste0("P", sprintf("%02d", 1:n_participants))),
+  word        = factor(paste0("W", sprintf("%02d", 1:n_words)))
+) %>%
+  mutate(
+    # Because expand.grid() here varies `participant` fastest, splitting frequency by
+    # as.numeric(word) correctly assigns each WORD to exactly one frequency category
+    # (a given picture's name is always High- or Low-frequency, consistently,
+    # across every participant who sees it), unlike splitting by row order.
+    frequency = factor(if_else(as.numeric(word) <= (n_words / 2), "High", "Low"),
+                        levels = c("High", "Low"))
+  )
+
+# Random effects for participants and words
+p_intercepts <- rnorm(n_participants, mean = 0, sd = 300)
+names(p_intercepts) <- levels(df_crossed$participant)
+
+w_intercepts <- rnorm(n_words, mean = 0, sd = 150)
+names(w_intercepts) <- levels(df_crossed$word)
+
+# Random slope for frequency within participants (people with aphasia vary in how much
+# a low-frequency name costs them, beyond the average frequency effect)
+p_slopes <- rnorm(n_participants, mean = 0, sd = 90)
+names(p_slopes) <- levels(df_crossed$participant)
+
+df_crossed <- df_crossed %>%
+  mutate(
+    naming_latency = 1500 +
+      220 * (frequency == "Low") +
+      p_intercepts[participant] +
+      w_intercepts[word] +
+      p_slopes[participant] * (frequency == "Low") +
+      rnorm(n(), mean = 0, sd = 150)
+  )
+```
+
+## 3. Model Specification Comparison: What Happens if We Ignore Item Variance?
+
+```{r fit-three-models}
+# Model A: Incorrect - ignores the fact that latencies are also clustered by word.
+mod_wrong <- lmer(naming_latency ~ frequency + (1 | participant), data = df_crossed)
+
+# Model B: Fully crossed random intercepts for both sampling units.
+mod_crossed_int <- lmer(
+  naming_latency ~ frequency + (1 | participant) + (1 | word),
+  data = df_crossed
+)
+
+# Model C: Adds a random slope for frequency within participants on top of the
+# crossed intercepts -- our "maximal" model for this design.
+mod_crossed_max <- lmer(
+  naming_latency ~ frequency + (1 + frequency | participant) + (1 | word),
+  data = df_crossed
+)
+```
+
+Let's directly compare the standard error on the `frequency` effect across these three
+models, since that's the number the language-as-fixed-effect fallacy is really about:
+
+```{r compare-se}
+cat("Model A (participant only):        SE =",
+    round(summary(mod_wrong)$coefficients["frequencyLow","Std. Error"], 1), "\n")
+cat("Model B (crossed intercepts):      SE =",
+    round(summary(mod_crossed_int)$coefficients["frequencyLow","Std. Error"], 1), "\n")
+cat("Model C (crossed + random slope):  SE =",
+    round(summary(mod_crossed_max)$coefficients["frequencyLow","Std. Error"], 1), "\n")
+```
+
+This is the "language-as-fixed-effect" fallacy made concrete: Model A's standard 
+error is roughly a **quarter** the size of Models B and C's, purely because it 
+never gave the model a chance to recognize that all 32 participants' 
+"Low-frequency" latencies are clustered around the same 20 specific pictures
+(and likewise for "High-frequency"). Model A is treating $32 \times 20 = 640$ Low-frequency
+trials as though they were 640 independent data points about the frequency effect, when in
+fact they only really tell you about 20 independent pictures' worth of information at the item
+level. A clinical researcher relying on Model A would report a tighter confidence interval 
+and a smaller $p$-value than the data can actually support, purely as an artifact of
+ignoring which 20 pictures happened to make it into this particular protocol.
+
+```{r full-summary}
+summary(mod_crossed_max)
+```
+
+## 4. Partitioning Variance: Intra-Class Correlations
+
+A natural follow-up question in a clinical sample is: how much of the total variance in
+naming latency is attributable to *who* the participant is (their overall severity), versus
+*which* picture it is? This is answered with an intra-class correlation (ICC) computed from
+the variance components.
+
+**A caveat before we do this.** ICCs are cleanly defined for a **random-intercepts-only**
+model, where "total variance" is just the sum of each grouping factor's intercept variance
+plus the residual. Once a model includes a random *slope* (like `mod_crossed_max` above), the
+total between-participant variance is no longer a single number -- it actually differs by
+frequency condition, since it depends on the slope variance and the intercept-slope
+covariance as well as the intercept variance. For a clean, single-number ICC, we'll compute it
+from `mod_crossed_int` (the intercepts-only model) instead:
+
+```{r compute-icc}
+vc <- as.data.frame(VarCorr(mod_crossed_int))
+vc
+
+total_var <- sum(vc$vcov)
+icc_participant <- vc$vcov[vc$grp == "participant"] / total_var
+icc_word        <- vc$vcov[vc$grp == "word"] / total_var
+
+cat("Participant ICC:", round(icc_participant, 3), "\n")
+cat("Word ICC:", round(icc_word, 3), "\n")
+```
+
+Here, which person you are accounts for the largest share of the variance (as we'd
+clinically expect - aphasia severity varies substantially across people), but the specific
+pictures used still account for an important share too - confirmation
+that ignoring the word-level variance, as Model A did, would be throwing away a real and
+meaningful source of dependency in the data, not a negligible one.
+
+## 5. Syntax Reference for Crossed Random-Effects Structures
+
+For quick reference, here are the `lme4` formula patterns that come up most often for crossed
+designs like this one (this block is for reference only -it isn't meant to be run on its
+own - and mirrors the explanation in the companion paper):
+
+```{r syntax-reference, eval=FALSE}
+# Fully crossed random intercepts (Model B above)
+(1 | participant) + (1 | word)
+
+# Crossed intercepts, with a random slope for frequency within participants only
+# (Model C above) - note that the random slope is nested under participant, not word,
+# because frequency is something that VARIES WITHIN each participant (they name both
+# High- and Low-frequency pictures) but is CONSTANT WITHIN each word (a given picture's
+# name is always High- or always Low-frequency for everyone who sees it). A random slope
+# for frequency within word would not even be estimable here, because frequency doesn't
+# vary within a word.
+(1 + frequency | participant) + (1 | word)
+
+# The same model, with the random intercept and slope for participant forced to be
+# uncorrelated (a "zero-correlation" or parsimonious model, in the sense discussed
+# in Section 3, Part 5.3)
+(1 | participant) + (0 + frequency | participant) + (1 | word)
+# ...or equivalently, using the double-bar shorthand:
+(1 + frequency || participant) + (1 | word)
+```
+
+The comment on the second block is worth pausing on, because it's the single most common
+mistake once designs get crossed: a random slope is only *meaningful* (and only *estimable*)
+for a factor that actually varies *within* the grouping unit it's nested under. `frequency`
+varies within participants here (each participant names both High- and Low-frequency
+pictures), so `(1 + frequency | participant)` makes sense; it does *not* vary within words (a
+word's frequency category never changes), so `(1 + frequency | word)` would be asking `lme4`
+to estimate something that structurally cannot exist in this design, and it will fail or
+return a degenerate result. This is the same general principle we saw in the linguistic
+crossed-effects example in the companion paper: "a random slope will be allowable if the slope
+factor varies within a cluster of observations... [and] would not be allowable if the slope
+factor varies between clusters of observations."
+
+## 6. The Same Logic in Health-Professions Education
+
+Everything above transfers directly to the DPT-assessment scenario mentioned at the start of
+this section, just with different names for the same two crossed sampling units:
+
+```{r dpt-analogy, eval=FALSE}
+# Confrontation naming:      naming_latency ~ frequency + (1|participant) + (1|word)
+# DPT written exam:          exam_score     ~ cohort    + (1|student)     + (1|item)
+```
+
+If you were comparing two cohorts of DPT students on a 40-item written exam (say, a "flipped
+classroom" cohort versus a traditional-lecture cohort), the 40 specific items on that exam are
+a sample from a much larger universe of items you could have written to test the same content
+domain. A model with only `(1|student)` implicitly treats those 40 items as if they
+*exhausted* the content domain, exactly as Model A did above for the 20 specific pictures --
+and would similarly risk reporting a cohort difference with more confidence than the data
+actually support. Including `(1|item)` (and, if you have reason to think some students'
+cohort-effect is itself variable across items, `(1 + cohort | student)`) is the same fix, for
+the same underlying reason.
+
+
+
+## Summary
+
+* Whenever participants respond to a *sample* of items (words, pictures, exam questions,
+  perturbation trials), treat those items as a random effect, not a fixed one - averaging
+  over them or ignoring them entirely can dramatically understate your true standard errors,
+  in exactly the way we saw with the frequency effect above.
+* A random slope only makes sense for a factor nested under a grouping unit if that factor
+  actually varies *within* that unit; a condition that is fixed at the item level (like a
+  picture's frequency category, or an exam question's difficulty tier) cannot have a
+  meaningful random slope by item.
+* ICCs (and "total variance") are only cleanly defined for random-intercepts-only models;
+  compute them from the intercepts-only version of your model, not from a model that also has
+  random slopes.
+* This same crossed structure -- `(1 | participant) + (1 | item)` - applies equally to
+  speech-language stimuli, DPT exam items, or any other design
+  where participants respond to a sampled set of measurement units.
+
+## References
+Clark, H. H. (1973). The language-as-fixed-effect fallacy: A critique of language statistics
+in psychological research. *Journal of Verbal Learning and Verbal Behavior, 12*(4), 335-359.
+https://doi.org/10.1016/S0022-5371(73)80014-3
+
+Judd, C. M., Westfall, J., & Yarkoni, T. (2012). Treating stimuli as a random factor in social
+psychology: A new and comprehensive solution to a pervasive but largely ignored problem.
+*Journal of Personality and Social Psychology, 103*(1), 54-69.
+https://doi.org/10.1037/a0028347
