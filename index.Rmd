@@ -39,10 +39,10 @@ beyond the scope of the original manuscript, and were not part of the peer-revie
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_07_generalized_linear_mixed_models.html
 
   8. **Section 08** - Crossed Random Effects (Participants and Stimuli/Items)
-      * (Coming Soon)
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_08_crossed_random_effects.html
 
   9. **Section 09** - Model Diagnostics for Mixed-Effects Models
-      * (Coming Soon)
+      * https://keithlohse.github.io/mixed_effects_models/lohse_MER_section_09_diagnostics_and_visualization.html
   
   10. **Further Readings and Recommendations**
       * https://keithlohse.github.io/mixed_effects_models/lohse_MER_chapter_the_last.html

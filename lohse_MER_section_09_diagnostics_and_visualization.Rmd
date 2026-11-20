@@ -48,8 +48,6 @@ We'll fit one example model and then work through each of these in turn.
 library(tidyverse)
 library(lme4)
 library(lmerTest)
-library(DHARMa)
-library(influence.ME)
 ```
 
 ```{r fit-example-model}
@@ -337,4 +335,16 @@ as.data.frame(dfb_subj) |>
   theme_bw() +
   theme(axis.text.x = element_text(angle = 90, size = 7))
 ```
+
+
+
+
+
+## Summary
+
+* Like other regression models, we have several key assumptions that underpin the validity of our statistical inferences in mixed-effects regression. These are: **additivity and linearity**; **normality of residuals**; **normality of random effects**; and **homoscedasticity** of the residuals. 
+
+* Broadly speaking, our models are robust to violations of any one of these assumptions, but our p-value can be very misleading if violation are major or if we have multiple violations at once. 
+* We also have some important *considerations* (not strictly speaking assumptions)
+that we want to check: **collinearity** among the fixed-effect predictors and **disproportionate influence** from either individual participants or data points.
 
