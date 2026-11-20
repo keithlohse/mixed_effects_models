@@ -23,11 +23,11 @@ section.
 Linear mixed-effects models rest on several distributional assumptions, extending the
 familiar ones from ordinary regression:
 
-1. **Additivity and Linearity**: I would more generally phrase this as "getting 
-   the mean structure correct". That is, we can fit curvilinear regressions with 
-   polynomials but remember that polynomials are additive and linear in their 
+1. **Additivity and Linearity**: I would more generally phrase this as the "shape" of our relationship correct. 
+   That is, we can fit curvilinear regressions with polynomials but remember that 
+   polynomials are additive and linear in their 
    components (e.g., `time + I(time^2)`). Bottom line, if we fit linear `time` to 
-   a non-linear pattern, everything downstream from that is biased. 
+   a non-linear pattern, everything downstream from that is likely biased. 
 2. **Normality of residuals**: $\epsilon_{ij} \sim \mathcal{N}(0, \sigma^2)$.
 3. **Normality of random effects**: $\mathbf{b}_i \sim \mathcal{N}(\mathbf{0},
    \boldsymbol{\Sigma}_b)$. The random slopes and intercepts, not just the residuals, should
@@ -35,7 +35,7 @@ familiar ones from ordinary regression:
 4. **Homoscedasticity**: residual variance is roughly constant across the range of fitted
    values and predictors (Section 6 covered what to do when this fails outright).
 
-And then we have two important *considerations* (not strcitly speaking assumptions)
+And then we have two important *considerations* (not strictly speaking assumptions)
 that we want to check:
 5. **No excessive collinearity** among the fixed-effect predictors, which inflates standard
    errors and makes individual coefficients unstable even when the overall model fits well.
@@ -48,7 +48,6 @@ We'll fit one example model and then work through each of these in turn.
 library(tidyverse)
 library(lme4)
 library(lmerTest)
-library(performance)
 library(DHARMa)
 library(influence.ME)
 ```
@@ -68,213 +67,274 @@ df_diag <- expand.grid(
       rnorm(n_sub, 0, 3)[subID] + rnorm(n(), 0, 1.5)
   )
 
+ggplot(data=df_diag, aes(x=time, y=score))+
+  geom_point(aes(col=group), alpha=0.5)+
+  stat_smooth(aes(col=group), alpha=0.5, method="lm")+
+  theme_bw() +
+  scale_color_manual(values=c("#E69F00", "#56B4E9"))
+
 mod_diag <- lmer(score ~ group * time + (1 + time | subID), data = df_diag)
+anova(mod_diag)
 ```
 
-## 2. An Automated First Pass: the `performance` Package
+## 2. Adding Our Residuals and Fitted Values into the Data Frame
+To perform many of our diagnostic checks, it is helpful to add the fitted values and residuals
+from our model back into the data. **Note the simplest tools for doing this `resid()` and `fitted()` export a vector equal in length to the number of observations that went into the model.** In practice, this means you need to be careful about any cases with missing values
+that might have been dropped from the model. Usually, you will just get an error that the data frame and the vector are not the same length and cannot be added together but it is good to remember that these functions do not automatically know which observations go with which participant are time point, so you - as the user - need to make sure the rows are lining up correctly. 
 
-The `performance` package (part of the `easystats` ecosystem) provides a single function,
-`check_model()`, that produces a full panel of standard diagnostic plots in one call:
+As a reminder, from a mixed model, we will get residuals and two different kinds of fitted values:
 
-```{r check-model, fig.width=9, fig.height=9}
-check_model(mod_diag)
+* Marginal Fitted Values: Use only the models fixed effects and ignore random effects (e.g., two participants from the group with have the same marginal fitted values if Group was a fixed effect).
+
+* Conditional Fitted Values: Use both the fixed effects and random effects to get a unique estimated value for each participants (e.g., two participants from the same group will have different conditional fitted values because conditional fitted values add their fixed and random effects together to get unique estimates for each person).
+
+* Residuals: Residuals are the differences between our data - the actual observed values - and the fitted values. Typically, we are interested in the **conditional residuals** (i.e., the difference between the data and each unique estimate) but we can also calculate **marginal residuals** (i.e., the difference between the data and the fixed effects only). 
+
+
+```{r fitted-values}
+# ---- Add fitted values and residuals to the data ----------------------------
+# lmer gives two kinds of fitted values and residuals:
+#   * Conditional: use the fixed effects AND the subject's own random effects
+#       fitted = X*b + Z*u ;  residual = y - X*b - Z*u   (level-1 residuals)
+#   * Marginal: use the fixed effects only
+#       fitted = X*b       ;  residual = y - X*b         (subject deviations + noise)
+# The level-1 assumptions (constant variance, normality) are about the
+# CONDITIONAL residuals. Marginal residuals are useful for checking whether
+# the population-average trajectory is right.
+df_diag <- df_diag %>%
+  mutate(
+    fit_cond   = fitted(mod_diag),                # X*b + Z*u
+    res_cond   = resid(mod_diag),                 # y - (X*b + Z*u)
+    fit_marg   = predict(mod_diag, re.form = NA), # X*b only
+    res_marg   = score - fit_marg,
+    # Standardized conditional residuals: residual / sigma
+    res_std    = res_cond / sigma(mod_diag)
+  )
 ```
 
-That panel is a good first pass, but it's worth also pulling out a few of its components
-individually, both because the individual functions give you numeric test statistics (not
-just plots) and because it's useful to know what each one is actually checking.
 
-```{r individual-diagnostics}
-check_singularity(mod_diag)     # Is the random-effects covariance matrix at a boundary?
-check_normality(mod_diag)       # Are the (Level-1) residuals approximately normal?
+## 2. Do we have the "shape" of the data correct? 
+Using these fitted values and residuals, we can do several checks to make sure we have the "shape" of the data correct. 
+
+**First, we can create a residuals versus fitted values plot** in which we plot the conditional residuals on the y-axis against the conditional fitted values on the x-axis. If we have the shape of the relationship (alternatively "functional form") correct, then there should be no real pattern to the residuals. If we see a clear pattern in the residuals (e.g., U-shape or n-shape) that would suggest there is some non-linearity in the data we are not accounting for (e.g., we fit linear function for `time` and instead should fit a quadratic, `time+I(time^2)`.
+
+``` {r resid v fitted plot}
+# 1. Residuals vs. fitted values ----------------------------------------------
+# We want a flat, patternless band centered on zero. A curve (U shape or
+# arch) suggests a wrong functional form, such as a missing quadratic term.
+p_res_fit <- ggplot(df_diag, aes(x = fit_cond, y = res_cond)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", formula = y ~ x, se = TRUE, colour = "firebrick") +
+  labs(title = "1. Residuals vs. fitted",
+       x = "Fitted values (conditional)", y = "Residual (conditional)")
+p_res_fit
 ```
 
-`check_singularity()` should look familiar: it's the same "boundary (singular) fit" issue we
-worked through in detail in Section 3, Part 5.3, just packaged as a convenience function so
-you don't have to inspect `VarCorr()` by hand every time.
+The residuals versus fitted plot combines the contributions of all fixed and random effects into a single fitted value. That makes it a convenient overall check, especially for whether residual variance changes with the predicted mean. But collapsing everything onto one axis can also hide problems: a misspecified effect of one predictor can be diluted or cancelled by the others. Plotting residuals against each predictor separately is a more sensitive check of functional form, and plotting them against one predictor within levels of another (here, `time` within `group`) checks additivity.
 
-## 3. Collinearity: A Real Problem, Not Just a Box to Check
+Note that our assumptions about shape really only applies to the continuous predictor and it's interactions (e.g., for a categorical factor, we will estimate a unique mean for every level, so we cannot really get the shape of it's mean structure wrong). When we shift to just `time` as a specific predictor, we will also switch to the marginal residuals. Using conditional residuals here wouldn’t be wrong, but it could mislead: the subject-level random effects can absorb some misspecification and make it look as though we’ve captured the shape of `time` better than we have. Broadly, marginal residuals are the natural choice for checking the fixed part of the model, and conditional residuals for checking the error assumptions at the lowest level of the data. 
 
-```{r check-collinearity}
-check_collinearity(mod_diag)
+In the plot below, we are interested in a few things. First, is the mean of the residuals generally close to zero across time? This suggests we got the shape of time correct. Second, do we see a similar pattern in the mean of the residuals in both groups? This suggests the same shape of time applies to both groups. And third, do we see any difference in the **variance** of the residuals across time? This is our first check into the **heteroskedasticity** of the residuals. 
+
+``` {r residuals v predictors plot}
+# 2. Residuals vs. predictors -------------------------------------------------
+# Same idea, but against each predictor, here time separately by group.
+# Using the MARGINAL residuals asks: "Does the population-average line for each
+# group follow the data at every time point?" Mean marginal residuals that
+# drift away from 0 at certain times mean the trajectory shape is wrong.
+p_res_time <- ggplot(df_diag, aes(x = time, y = res_marg)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_jitter(width = 0.08, alpha = 0.5) +
+  stat_summary(fun = mean, geom = "line", colour = "firebrick", linewidth = 1) +
+  stat_summary(fun = mean, geom = "point", colour = "firebrick", size = 2.5) +
+  facet_wrap(~ group) +
+  labs(title = "2. Marginal residuals vs. time, by group",
+       x = "Time", y = "Residual (marginal)")
+p_res_time
+```
+Finally, it helps to plot the observed trajectories (a spaghetti plot of each participant’s data over `time`) against the trajectories implied by the model (the group-average lines from our fixed effects). This plot asks two questions. First, does the model’s average trajectory match the overall shape of the data? Second, do the individual trajectories vary in ways the model can represent?
+
+Suppose most participants follow a roughly linear path and the model estimates a linear trend: good agreement. But suppose many participants level off or tail downward at later time points. Then the average trajectory isn’t linear, and the fixed effect of time is misspecified; we may need a quadratic or spline term. The same is true if the curvature shows up in one group but not the other: the model is missing a group-by-curvature interaction. 
+
+If we have tested a series of unconditional models on the front-end, this can often be a more confirmatory step (e.g., linear slopes led to the lowest AIC and we see agreement in linear slopes). However, because we often choose the shape of `time` in unconditional models on the front-end, we can now check that it still accurately reflects each group on the back-end once all moderators are accounted for.
+
+
+```{r observed versus implied trjectories}
+# 3. Observed vs. model-implied trajectories ----------------------------------
+# Thin lines show each subject's observed data. Thick lines show the
+# fixed-effect (population-average) prediction for each group. Model and data
+# should follow the same overall shape.
+p_traj <- ggplot(df_diag, aes(x = time, y = score)) +
+  geom_line(aes(group = subID), alpha = 0.3) +
+  geom_line(aes(y = fit_marg, colour = group), linewidth = 1.3) +
+  facet_wrap(~ group) +
+  labs(title = "3. Observed trajectories and fixed-effect predictions",
+       x = "Time", y = "Score") +
+  theme(legend.position = "none")
+
+p_traj
 ```
 
-With just a linear effect of `time`, this particular model's VIFs are all comfortably low -
-which is a fine result, but not a very interesting one to stop at. Collinearity problems in
-mixed models show up most often once you add a **polynomial** term, exactly as Section 2
-warned in passing: "if time is centered on the first observation... then higher polynomials
-will often be highly correlated, which can create convergence issues for the model." Let's
-actually see that happen, by adding a quadratic effect of time (and its interaction with
-`group`) to our model, the same way we did with `year.0_sq` back in Section 2:
 
-```{r check-collinearity-quadratic}
-mod_quad <- lmer(score ~ group * time + group * I(time^2) + (1 + time | subID), data = df_diag)
-check_collinearity(mod_quad)
+
+## 3. Assumptions about the Random Parts of the Model 
+We can check **homoskedasticity** (i.e., similar variance) by creating a scale-location plot. 
+In this figure, we plot the absolute value of the standardized residuals against the conditional fitted values. As before, we are hoping to see no clear pattern to these residuals. 
+
+Additionally, we can plot our conditional residuals at the specific levels of our fixed effects, by `group` in this case. If one group showed massively larger residual variance than the other group, that would suggest we need a more complicated model (i.e., at present our model assumes that a single residual variance applies equally to both groups).
+
+```{r scale location plot}
+# 4. Homoscedasticity (scale-location plot) -----------------------------------
+# Plot sqrt(|standardized residual|) against fitted values. If the variance is
+# constant, the smoothed line is roughly flat. A funnel or upward trend means
+# the residual variance increases with the mean.
+# Also check the variance by group, because the model assumes ONE sigma
+# shared by both groups.
+p_scale_loc <- ggplot(df_diag, aes(x = fit_cond, y = sqrt(abs(res_std)))) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "loess", formula = y ~ x, se = TRUE, colour = "firebrick") +
+  labs(title = "4a. Scale-location",
+       x = "Fitted values (conditional)",
+       y = expression(sqrt("|standardized residual|")))
+p_scale_loc
+
+p_var_group <- ggplot(df_diag, aes(x = group, y = res_cond)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_boxplot(outlier.shape = NA, width = 0.4) +
+  geom_jitter(width = 0.1, alpha = 0.5) +
+  labs(title = "4b. Residual spread by group", x = NULL, y = "Residual (conditional)")
+p_var_group
 ```
 
-Now we have a real problem: VIFs above 35 for `time`, `I(time^2)`, and their interactions
-with `group`. A VIF that large means the standard errors on these terms are roughly six
-times larger than they would be if the predictors were uncorrelated -- more than enough to
-turn a real effect into a "non-significant" one for reasons that have nothing to do with your
-actual sample size. This is happening for a simple, structural reason: `time` runs from 1 to
-4, never crossing zero, so `time` and `time^2` - and each of their interactions with `group`
-- end up numerically correlated with each other. Let's confirm the fix, mean-centering `time`
-first, exactly as Section 2 recommended:
-
-```{r fix-collinearity}
-df_diag <- df_diag %>% mutate(time.c = time - mean(time))
-mod_quad_centered <- lmer(score ~ group * time.c + group * I(time.c^2) + (1 + time.c | subID),
-                           data = df_diag)
-check_collinearity(mod_quad_centered)
+Next, we can check the normality of our residuals using a quantile-quantile ("QQ") normal plot. In this plot we show the quantiles observed in the sample against the hypothetical quantiles we would observe if the data were perfectly normal. 
+```{r normality of residuals}
+# 5. Normality of level-1 residuals -------------------------------------------
+# QQ plot of standardized conditional residuals. Points should lie close to
+# the line. Heavy tails show up as an S shape, and skew as a curve.
+# (In larger samples, mild non-normality here matters much less than errors
+# in the mean structure.)
+p_qq_resid <- ggplot(df_diag, aes(sample = res_std)) +
+  stat_qq(alpha = 0.6) +
+  stat_qq_line(colour = "firebrick") +
+  labs(title = "5. QQ plot: level-1 residuals",
+       x = "Theoretical quantiles", y = "Sample quantiles")
+p_qq_resid
 ```
 
-Every VIF drops back into a comfortable range (all at or below 2.1). This is exactly the pattern Section 2 was warning you about in advance, made concrete: **centering matters most, and matters almost immediately, once
-polynomial or interaction terms enter the model** - it is worth doing by default, not just
-when a diagnostic tool happens to catch a problem after the fact. (You may also notice
-`performance`'s own warning above the table - *"Model has interaction terms. VIFs might be
-inflated"* - a reminder that VIFs computed in the presence of interaction terms are a known
-soft spot for this particular diagnostic; see Fox & Weisberg, already cited in the companion
-paper for this repository.)
+We can make equivalent plots of all of our random effects. The only notable difference will be that we should have fewer observations in these QQ plots. For instance, if I had 10 observations for 10 participants, my residual plot with have 100 data points, but a QQ plot of the random intercepts/slopes would only have 10 data points.
+```{r normality of random effects}
+# 6. Normality of the random effects ------------------------------------------
+# One point per SUBJECT, so there are only n_sub points per panel. Expect
+# some wobble. We are looking for gross departures or a single extreme
+# subject.
+# Caveat: BLUPs are shrunken toward 0 and can look "more normal" than the
+# true random-effect distribution, so this check has limited power.
+re_df <- ranef(mod_diag)$subID %>%
+  as_tibble(rownames = "subID") %>%
+  pivot_longer(-subID, names_to = "term", values_to = "blup")
 
-
-## 4. Are the Random Effects Themselves Normally Distributed?
-
-`check_model()` and `check_normality()` both focus on the residual's assumption. It's
-worth also checking the random effect normality assumption directly - are the estimated subject-level
-deviations (BLUPs) themselves roughly normal?
-
-```{r ranef-qq, fig.align="center", fig.width=5, fig.height=5}
-re_vals <- ranef(mod_diag)$subID
-
-qqnorm(re_vals$`(Intercept)`, main = "QQ Plot: Random Intercepts")
-qqline(re_vals$`(Intercept)`, col = "red")
+p_qq_re <- ggplot(re_df, aes(sample = blup)) +
+  stat_qq(alpha = 0.7) +
+  stat_qq_line(colour = "firebrick") +
+  facet_wrap(~ term, scales = "free_y") +
+  labs(title = "6. QQ plots: random effects (BLUPs)",
+       x = "Theoretical quantiles", y = "BLUP")
+p_qq_re
 ```
 
-With only 35 subjects, don't expect a perfectly straight line -- some wobble in the tails is
-normal at this sample size. What you're looking for is a *systematic* pattern (a clear curve,
-or one or two points wildly detached from the rest), not perfection.
+Two things to keep in mind when checking the normality assumption:
 
-## 5. Influence Diagnostics: Is Any Single Subject Driving the Result?
+1. This only applies to our "traditional" linear mixed effects model in which normality of the residuals and random-effects is assumed. For other models (e.g., ordinal models, logistic models), the normality assumption might only apply to the random effects or to neither. So, although we will probably be checking against normality most of the time, remember the key thing is to check the assumptions specific to your model. It is just that most of the time we are assuming normality. 
 
-Every diagnostic so far has asked about the model's assumptions *in aggregate* -- is the
-overall distribution of residuals normal, is variance roughly constant. None of them ask a
-different, equally important question: is your result actually being driven by the model fit
-to all 35 subjects, or largely by one or two of them? A single subject with an unusual
-trajectory (a data-entry error, a genuinely atypical clinical course, a person for whom the
-protocol was not followed correctly) can sometimes swing a fixed-effect estimate on its own,
-even when nothing else about the model's residuals looks wrong.
+2. Many learners want to reach for hypothesis tests as a way of getting a clear "go / no-go" decision about normality (e.g., Kruskil-Wallis or Shaprio-Wilk tests), but I would generally discourage this way of thinking about parametric assumptions. First, these tests are subject to many different vulnerabilities (e.g., low power an you miss non-normality or extreme sensitivity and you reject trivial non-normality in large samples). Second, violating normality happens on a continuum and so do its effects (i.e., our predictions get more wrong the less our assumptions hold, there is not a clear threshold at which we are right or wrong). Third, assuming that our other assumptions hold, linear mixed effect models are generally robust to violations of normality. So, unless you have extremely non-normal residuals - in which case you should probably reach for a different type of model - minor deviations from normality probably won't appreciably affect your fixed effect estimates or statistical inferences. 
 
-The logic behind detecting this is direct: refit the model once for every subject, each time
-leaving that one subject out, and see how much the fixed effects move. The `influence.ME`
-package automates exactly this (one refit per subject) and standardizes the result into
-familiar measures -- **Cook's Distance** (an overall summary of how much *all* the fixed
-effects shift when a subject is dropped) and **DFBETAS** (the same idea, broken out separately
-for each individual coefficient).
 
-To see what a genuinely influential subject looks like, we'll plant one: suppose Subject 3
-(assigned to the Drug group) has a data-entry error, or a genuinely atypical clinical course,
-such that their scores run sharply *downward* over time instead of upward like everyone
-else's:
+## 4. Checking Your Data
+**Collinearity** arises when predictors in our model are correlated. Some degree of collinearity is to be expected, but high degrees of collinearity are problematic. For instance, imagine that I have `height` and `weight` in the model. Taller people tend to be heavier, on average, but the correlation is modest, so it will make sense to "control for" one variable when talking about the other (e.g., are you heavy for your height?). In contrast, imagine that by accident I put `height` in inches and `height_cm` in centimeters into my model. These two variables are perfectly correlated, so cannot "control for" one without completely removing the other (i.e., all of the variance in inches is already explained by centimeters and vice versa).
 
-```{r plant-outlier}
-df_diag_check <- df_diag %>%
-  mutate(score = if_else(subID == "3", 40 - 6 * time, score))
+A common way to check collinearity is by calculating **variance inflation factors (VIF)**. As the name suggest, VIF shows how much the variance for one term is inflated based on the presence of other terms in the model. Ideally, we would like variance inflation factors close to 1.o (i.e., no inflation). In practice, VIF is most problematic when it gets above 4 or 5. 
 
-mod_diag_check <- lmer(score ~ group * time + (1 + time | subID), data = df_diag_check)
+```{r collinearity}
+# 7. Collinearity: VIF computed from the fixed-effect covariance matrix -------
+# In OLS, VIF_j = 1 / (1 - R^2_j). For a mixed model we can get an equivalent
+# value from the correlations among the fixed-effect estimates: drop the
+# intercept, convert vcov() to a correlation matrix, invert it, and take the
+# diagonal. (This is what car::vif() does for merMod objects.)
+vif_by_hand <- function(model) {
+  V <- as.matrix(vcov(model))
+  V <- V[-1, -1, drop = FALSE]          # drop the intercept
+  R <- cov2cor(V)                       # correlations among the estimates
+  setNames(diag(solve(R)), colnames(R)) # VIF_j = [R^-1]_jj
+}
+vif_by_hand(mod_diag)
 ```
 
-```{r influence-diagnostics}
-# influence.ME requires (and here we use) a random-intercepts model per grouping factor;
-# it works whether or not that model also has random slopes.
-infl <- influence(mod_diag_check, group = "subID")
+Looking our VIFs above, the largest is <3, which is below our cut-off of 4 or 5, but this is good teachable moment to reinforce a lesson from **Section 05**: the VIF we are seeing here is an artifact of how we coded the data, it is not an essential or irreducible collinearity. To see this is brief, we will mean-center our time variable and code group using orthogonal polynomials. For a more detailed explanation see **Section 05**. 
 
-cooks_d <- cooks.distance(infl)
-head(round(cooks_d, 3))
+```{r essential collinearity}
+# Teaching point: part of the correlation between the 'group' main effect and
+# the group x time interaction is "nonessential" collinearity. It comes from
+# coding, not from the data: 'time' runs 1-4, so 0 lies outside the observed
+# range. Centering time moves the group main effect to the middle of the study
+# and lowers those VIFs. The VIFs here are modest to begin with (all < 2.5);
+# the effect is much bigger when time is far from 0, e.g. coded as age in
+# years. The model fit is identical; only the meaning of the lower-order
+# terms changes.
+
+df_diag <- df_diag %>% mutate(time_c = time - mean(time))
+contrasts(df_diag$group) <- contr.poly(nlevels(df_diag$group))
+mod_diag_c <- lmer(score ~ group * time_c + (1 + time_c | subID), data = df_diag)
+vif_by_hand(mod_diag_c)
+c(logLik_raw = logLik(mod_diag), logLik_centered = logLik(mod_diag_c)) # same fit
+```
+Simply by changing how we coded our data, this dropped all of the collinearities to 1.0, illustrating that this collinearity was an artifact and not essential to our model. 
+
+In contrast, consider psychologist trying to measure anxiety and depression in a sample of people. These constructs have considerable overlap (e.g., anxious people are more depressed and depressed people are more anxious) and will therefore be collinear in our statistical model. However, this collinearity is essential to what those data actually are (i.e., it reflects a fundamental property of anxiety and depression) not an artifact of how we have coded the data. 
+
+
+Next, we can check for *influential data points* that might have undue sway on our model. It is easiest to think about this influential data points as outliers (on either X or Y) that pull the models predictions in their direction. The most famous example of this - an beautiful way to see many of these regression diagnostics - is a dataset called [Anscombe's Quartet](https://en.wikipedia.org/wiki/Anscombe%27s_quartet). For our purposes, I will show how to calculate a statistic called [Cook's Distance](https://en.wikipedia.org/wiki/Cook%27s_distance) as a way of identifying overly influential individuals in our mixed model. 
+
+```{r cooks distance}
+# 8. Influential subjects and data points -------------
+## Subject level: refits the model 35 times, once per subID left out
+mod_lme4 <- lme4::lmer(score ~ group * time + (1 + time | subID), data = df_diag)
+
+
+infl_subj <- stats::influence(mod_lme4, groups = "subID")
+cd_subj   <- cooks.distance(infl_subj)
+dfb_subj  <- dfbetas(infl_subj)
+
+infl_obs  <- stats::influence(mod_lme4, ncores = 4)
+cd_obs    <- cooks.distance(infl_obs)
+
+subj_ids <- as.character(unique(df_diag$subID))  # order influence() deleted subjects
+
+## 1. Cook's D by subject
+tibble(subID = subj_ids, cooksd = cd_subj) |>
+  ggplot(aes(x = reorder(subID, -cooksd), y = cooksd)) +
+  geom_col() +
+  labs(x = "Subject", y = "Cook's D") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, size = 7))
+
+## 2. Cook's D by observation
+tibble(row = seq_along(cd_obs), cooksd = cd_obs) |>
+  ggplot(aes(x = row, y = cooksd)) +
+  geom_point() +
+  labs(x = "Observation (row)", y = "Cook's D") +
+  theme_bw()
+
+## 3. DFBETAS by subject, one panel per fixed effect
+as.data.frame(dfb_subj) |>
+  mutate(subID = subj_ids) |>
+  pivot_longer(-subID, names_to = "term", values_to = "dfbetas") |>
+  ggplot(aes(x = subID, y = dfbetas)) +
+  geom_point() +
+  geom_hline(yintercept = 0) +
+  facet_wrap(~ term) +
+  labs(x = "Subject", y = "DFBETAS") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, size = 7))
 ```
 
-A commonly-used rule of thumb flags a subject as worth a closer look if their Cook's Distance
-exceeds $4/n$ (here, $4/35 \approx 0.114$):
-
-```{r influence-cutoff}
-cutoff <- 4 / n_sub
-which(cooks_d > cutoff)
-```
-
-Subject 3 (Cook's D well above 1, versus everyone else comfortably under 0.1) is flagged
-immediately and unambiguously -- exactly as it should be, since we built it to be an extreme
-case. The next step is `dfbetas()`, which tells you *which* coefficient(s) that subject is
-actually distorting:
-
-```{r dfbetas}
-db <- dfbetas(infl)
-round(db["3", ], 3)
-```
-
-Here, the planted subject's DFBETAS is far larger for the `group:time` interaction ($-1.93$
-standard errors' worth of shift) than for the `group` main effect ($0.80$) -- this one subject
-is distorting our conclusion about whether the *groups' trajectories differ over time* much
-more than our conclusion about the groups' overall difference. In a real dataset, this is
-exactly the kind of pattern that should send you back to that specific subject's raw data
-before you trust the interaction term.
-
-Being flagged as influential is a prompt to look more closely, not an automatic reason to
-exclude a subject. Reasonable next steps include: checking that subject's raw data for
-entry errors, considering whether their result is substantively meaningful (a legitimately
-unusual clinical course is data, not noise), and reporting the fixed effects both with and
-without that subject if the conclusion genuinely depends on their inclusion. Refitting the
-whole model once per subject is not free computationally -- for very large samples or slow
-models, running `influence()` on a random subset of subjects first is a reasonable way to
-get a sense of whether this is worth pursuing further.
-
-## 6. You Don't Need a New Model to Practice This
-
-Everything in this section applies just as well to models you've already built earlier in this
-repository. As one example, revisit `cond_01` from Section 2 (the conditional growth model
-with AIS Grade predicting the shape of recovery over time):
-
-```{r reuse-section2, eval=FALSE}
-# From Section 2:
-#   cond_01 <- lmer(rasch_FIM~1+year.0*AIS_grade+year.0_sq*AIS_grade+year.0_cu*AIS_grade+
-#                    (1+year.0+year.0_sq+year.0_cu|subID), data=DAT2, REML=FALSE, ...)
-check_model(cond_01)
-check_collinearity(cond_01)
-influence(cond_01, group = "subID") %>% cooks.distance() %>% head()
-```
-
-Because `cond_01` includes three polynomial terms (`year.0`, `year.0_sq`, `year.0_cu`) each
-crossed with `AIS_grade`, we would actually expect `check_collinearity()` to flag some
-concerning VIFs here too, for exactly the same reason as Section 3 above -- another good
-argument for centering continuous predictors as a matter of habit, not just when a diagnostic
-tool happens to catch it. With 40 subjects providing repeated functional-independence scores
-over 18 months, `influence()` is also a genuinely useful check here: a single subject with an
-unusually steep or shallow recovery trajectory could plausibly be shaping the estimated shape
-of recovery for their whole AIS Grade.
-
-## Summary
-
-* `performance::check_model()` gives a fast first-pass diagnostic panel; `check_singularity()`,
-  `check_collinearity()`, and `check_normality()` let you pull out specific numeric checks.
-* High VIFs are not just a nuisance warning -- they represent a real loss of statistical power
-  on the affected coefficients, and are frequently caused by an uncentered continuous
-  predictor that's involved in an interaction (exactly as we saw here).
-* `DHARMa::simulateResiduals()` provides a diagnostic approach that works essentially
-  unchanged for GLMMs (Section 7), unlike diagnostics that assume Gaussian residuals.
-* Check the normality of the random effects (BLUPs) themselves, not just the Level-1 residuals.
-* `influence.ME::influence()` checks a different kind of problem entirely -- whether a single
-  subject/cluster is driving your fixed-effect estimates -- by systematically refitting the
-  model with each subject left out in turn; `cooks.distance()` flags which subjects to look at,
-  `dfbetas()` tells you which specific coefficients they're affecting.
-* These diagnostics are worth running on models you've already built in earlier sections, not
-  only on new ones -- `cond_01` from Section 2 is a good candidate to practice on.
-
-## References
-Lüdecke, D., Ben-Shachar, M. S., Patil, I., Waggoner, P., & Makowski, D. (2021). performance:
-An R Package for Assessment, Comparison and Testing of Statistical Models. *Journal of Open
-Source Software, 6*(60), 3139. https://doi.org/10.21105/joss.03139
-
-Hartig, F. (2022). DHARMa: Residual Diagnostics for Hierarchical (Multi-Level / Mixed)
-Regression Models. https://CRAN.R-project.org/package=DHARMa
-
-Nieuwenhuis, R., te Grotenhuis, M., & Pelzer, B. (2012). influence.ME: Tools for Detecting
-Influential Data in Mixed Effects Models. *The R Journal, 4*(2), 38-47.
-https://doi.org/10.32614/RJ-2012-011
